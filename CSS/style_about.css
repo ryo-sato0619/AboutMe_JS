@@ -114,7 +114,7 @@ nav {
         font-size: 1.2em;
     }
     .footer-menu {
-        flex-direction: cokumn;
+        flex-direction: column;
         align-items: center;
     }
     .footer-munu li {
