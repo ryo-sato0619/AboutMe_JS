@@ -1,3 +1,10 @@
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin: 0;
+}
+
 header {
     width:100%;
     background-color: #000;
@@ -8,6 +15,10 @@ header {
 nav {
     max-width: 100%;
     margin: 0 auto;
+}
+
+main {
+    flex: 1;
 }
 
 .menu {
@@ -75,13 +86,11 @@ nav {
     padding-right: 15px;
 }
 
-  footer {
+footer {
     background-color: #000;
     color: #fff;
     padding: 20px 0;
     text-align: start;
-    position: absolute;
-    bottom: 0;
     width: 100%;
   }
 
@@ -101,7 +110,7 @@ nav {
         align-items: flex-start;
     }
     .menu li {
-        margin: 1px 0;
+        margin: 5px 0;
     }
     .menu li a {
         width: 100%;
