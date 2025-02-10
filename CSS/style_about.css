@@ -114,6 +114,17 @@ footer {
     }
     .menu li a {
         width: 100%;
-        padding: 10px;
+        text-align: center;
+    }
+    .about-table {
+        width: 100%;
+        margin: 20px 0;
+    }
+    .about-th, .about-td {
+        display: block;
+        width: 100%;
+    }
+    .about-th {
+        padding-top: 20px;
     }
   }
