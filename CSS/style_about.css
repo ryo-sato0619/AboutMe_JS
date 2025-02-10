@@ -96,6 +96,9 @@ nav {
 
   /* メディアクエリ */
   @media (max-width: 768px) {
+    .header {
+      padding: 5px 0;
+    }
     .main {
       padding: 5px;
     }
