@@ -96,8 +96,16 @@ nav {
 
   /* メディアクエリ */
   @media (max-width: 768px) {
-    .header {
-      padding: 5px 0;
+    .menu{
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .menu li {
+        margin: 5px 0;
+    }
+    .menu li a {
+        width: 100%;
+        padding: 10px;
     }
     .main {
       padding: 5px;
