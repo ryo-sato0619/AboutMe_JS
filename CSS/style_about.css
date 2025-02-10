@@ -116,15 +116,4 @@ footer {
         width: 100%;
         padding: 10px;
     }
-    .title {
-        font-size: 1.2em;
-        padding: 5px;
-    }
-    .footer-menu {
-        flex-direction: column;
-        align-items: center;
-    }
-    .footer-munu li {
-        margin: 5px 0;
-    }
   }
