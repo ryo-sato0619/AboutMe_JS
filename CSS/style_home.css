@@ -145,17 +145,28 @@ nav {
 
   /* メディアクエリ */
   @media (max-width: 768px) {
-    .main {
-      padding: 5px;
-    }
-    .title {
-        font-size: 1.2em;
-    }
-    .footer-menu {
-        flex-direction: column;
-        align-items: center;
-    }
-    .footer-menu li {
-        margin: 5px 0;
-    }
+    .menu{
+      flex-direction: column;
+      align-items: flex-start;
   }
+  .menu li {
+      margin: 10px 0;
+  }
+  .menu li a {
+      width: 100%;
+      padding: 10px;
+  }
+  .main {
+    padding: 5px;
+  }
+  .title {
+      font-size: 1.2em;
+  }
+  .footer-menu {
+      flex-direction: column;
+      align-items: center;
+  }
+  .footer-munu li {
+      margin: 5px 0;
+  }
+}
