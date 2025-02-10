@@ -86,7 +86,7 @@ nav {
     display: flex;
     justify-content: space-around;
     flex-wrap: wrap;
-    margin-top: 20px;
+    margin-top: 10px;
   }
 
   .section {
@@ -148,7 +148,7 @@ nav {
     .menu{
       display: flex;
       flex-wrap: wrap;
-      justify-content; center;
+      justify-content: center;
       align-items: center;
       padding: 5px 0;
   }
