@@ -5,6 +5,7 @@
         <meta name = "viewport" content = "width=device-width, initial-scale=1.0">
         <title>お問い合わせ</title>
         <link rel = "stylesheet" type = "text/css" href = "../CSS/style_contact.css">
+        <script src="../JS/contact.js"></script>
     </head>
     <!--ヘッダー-->
     <header>
@@ -29,10 +30,6 @@
         </nav>
     </header>
     <!--メイン-->
-    <body>
-        <script src="../JS/contact.js"></script>
-    </body>
-    
     <main>
         <section class="main">
             <h1 class="title">お問い合わせ</h1>
@@ -42,7 +39,7 @@
         </section>
 
         <div class="contact-form">
-            <form id="contact-form" action="/send-email" method="POST">
+            <form id="contact-form" action="http://localhost:3000/contact" method="POST">
                 <label for="name">お名前</label>
                 <input type="text" id="name" name="name" required>
                 <label for="email">メールアドレス(任意)</label>
