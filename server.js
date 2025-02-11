@@ -28,7 +28,7 @@ app.post('/send-email', async (req, res) => {
     const mailOptions = {
         from: process.env.EMAIL_USER, 
         to: process.env.EMAIL_USER,  //自分自身に送信
-        subject: '${new Date().toLocaleDateString()} ${name}',
+        subject: `${new Date().toLocaleDateString()} ${name}`,
         text: `
 【お名前】
 ${name}
@@ -60,7 +60,7 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 //静的ファイルを提供（ルートディレクトリから）
-app.use(express.static(path.join(_driname)));
+app.use(express.static(path.join(__dirname)));
 
 app.get('/config', (req, res) => {
     const supabaseUrl = process.env.SUPABASE_URL;
