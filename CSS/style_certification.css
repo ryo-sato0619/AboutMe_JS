@@ -70,6 +70,30 @@ nav {
   margin-bottom: 2em;
 }
 
+.cert-table {
+  width: 900px;
+  height: auto;
+  border-collapse: collapse;
+  border-top: solid 2px #666;
+  border-bottom: solid 2px #666;
+  margin-left: 50px;
+  margin-top:0px;
+  margin-bottom: 50px;
+}
+
+.cert-th {
+  width: 160px;
+  color: #fff;
+  background-color: #333;
+  border: solid 1px #eee;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: 15px;
+  padding-right: 15px;
+  text-align: left;
+  font-weight: normal;
+}
+
   footer {
     background-color: #000;
     color: #fff;

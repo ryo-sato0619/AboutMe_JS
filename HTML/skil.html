@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <meta charaset="UTF-8">
+        <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>関わったスキル</title>
         <link rel="stylesheet" type="text/css" href="../CSS/style_skil.css">
@@ -34,26 +34,50 @@
         <p>経験月数は累計で、2025年2月現在の内容です</p>
         <p class="bottom_space"></p>
 
-
-        <div class="lang-gird" id="lang-conntainer">
-            <!--言語情報を必要に応じて動的に生成-->
-        </div>
+        <table class="skill-table">
+            <thead>
+                <tr>
+                    <th class="skill-th">言語</th>
+                </tr>
+            </thead>
+            
+            <tbody id="lang-container">
+                <!--言語情報を必要に応じて動的に生成-->
+            </tbody>
+        </table>
 
         <p class="bottom_space"></p>
 
-        <div class="db-gird" id="db-conntainer">
-            <!--DB情報を必要に応じて動的に生成-->
-        </div>
+        <table class="skill-table">
+            <thead>
+                <tr>
+                    <th class="skill-th">DB</th>
+                </tr>
+            </thead>
+
+            <tbody id="db-container">
+                <!--DB情報を必要に応じて動的に生成-->
+            </tbody>
+        </table>
 
         <p class="bottom_space"></p>
 
-        <div class="os-gird" id="os-conntainer">
-            <!--OS情報を必要に応じて動的に生成-->
-        </div>
+        <table class="skill-table">
+            <thead>
+                <tr>
+                    <th class="skill-th">OS</th>
+                </tr>
+            </thead>
+    
+            <tbody id="os-container">
+                <!--OS情報を必要に応じて動的に生成-->
+            </tbody>
+        </table>
+
+</main>
 
         <!--JavaScriptファイルを読み込み-->
         <script type="module" src="../JS/main_script.js"></script>
-</main>
 
     <!--フッター-->
     <footer>
