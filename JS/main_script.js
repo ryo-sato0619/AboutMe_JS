@@ -1,3 +1,5 @@
+console.log("JavaScriptファイルが読み込まれました"); // デバッグ用
+
 import { createSupabaseClient } from './supabase_client.js';
 
 document.addEventListener("DOMContentLoaded", function() {
