@@ -31,10 +31,10 @@ exports.handler = async function(event, context) {
 【お名前】
 ${name}
 
-${email ? `【メールアドレス】
+${email ? 
+    `【メールアドレス】
 ${email}
-` : ''}【書籍名】
-${title}
+` : ''}
 
 【メッセージ】
 ${message}
