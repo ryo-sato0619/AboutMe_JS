@@ -9,13 +9,13 @@ window.onload = function() {
     console.log("Current page URL:", pageUrl); 
 
     //資格ページなら
-    if (pageUrl.includes('certification.html')) {
+    if (pageUrl.includes('certification')) {
         console.log("Certification page detected"); 
         //資格ページ情報を表示
         displayCert();
     }
     //スキル・経験ページなら
-    else if (pageUrl.includes('skil.html')) {
+    else if (pageUrl.includes('skil')) {
         console.log("Skill page detected"); 
         //スキル・経験情報を表示
         displaySkill();
