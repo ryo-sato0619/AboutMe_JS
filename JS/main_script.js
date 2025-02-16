@@ -44,17 +44,17 @@ document.addEventListener("DOMContentLoaded", function() {
             //資格名
             const row = document.createElement('tr');
             const nameCell = document.createElement('td');
-            nameCell.classList.add('cert-td');
+            nameCell.classList.add('cert-td1');
             nameCell.textContent = cert.name;
             row.appendChild(nameCell);
             //取得時期
             const dateCell = document.createElement('td');
-            dateCell.classList.add('cert-td');
+            dateCell.classList.add('cert-td2');
             dateCell.textContent = cert.date;
             row.appendChild(dateCell);
             //関連スキル
             const skillCell = document.createElement('td');
-            skillCell.classList.add('cert-td');
+            skillCell.classList.add('cert-td2');
             skillCell.textContent = cert.conn;
             row.appendChild(skillCell);
 
@@ -131,12 +131,12 @@ document.addEventListener("DOMContentLoaded", function() {
             //スキル名
             const row = document.createElement('tr');
             const nameCell = document.createElement('td');
-            nameCell.classList.add('skill-td');
+            nameCell.classList.add('skill-td1');
             nameCell.textContent = skill.name;
             row.appendChild(nameCell);
             //使用期間
             const experienceCell = document.createElement('td');
-            experienceCell.classList.add('skill-td');
+            experienceCell.classList.add('skill-td2');
             experienceCell.textContent = skill.experience + 'ヶ月';
             row.appendChild(experienceCell);
 

@@ -56,42 +56,70 @@ html, body {
     font-weight: normal;
     color:#000;
     background-color:#fdfcfc;
-    border-left:1px solid #333;
-    border-right:1px soid #333;
-    border-top:1px solid #999;
-    border-bottom:1px solid #999;
+    border-left:solid 1px #333;
+    border-right:solid 1px  #333;
+    border-top:solid 1px #333;
+    border-bottom:solid 1px #333;
     padding:10px;
     box-shadow:0 5px 4px #777;
     text-shadow:1px 3px 4px #777;
     margin-bottom: 20px
-}
+  }
 
   .bottom_space {
-      margin-bottom: 2em;
-    }
+    margin-bottom: 2em;
+  }
 
   .skill-table {
     width: 900px;
     height: auto;
     border-collapse: collapse;
-    border-top: solid 2px #666;
-    border-bottom: solid 2px #666;
+    border-top: solid 1px #333;
+    border-bottom: solid 1px #333;
+    border-left:solid 1px #333;
+    border-right:solid 1px #333;
     margin-left: 50px;
     margin-top:0px;
     margin-bottom: 50px;
   }
-
+  
   .skill-th {
     width: 160px;
     color: #fff;
     background-color: #333;
-    border: solid 1px #eee;
+    border: solid 1px #000;
     padding-top: 10px;
     padding-bottom: 10px;
     padding-left: 15px;
     padding-right: 15px;
     text-align: left;
     font-weight: normal;
+  }
+  
+  .skill-td1 {
+    width: 160px;
+    color: #fff;
+    background-color:#666;
+    border: solid 1px #000;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 15px;
+    padding-right: 15px;
+    text-align: left;
+    font-weight: normal;
+  }
+
+.skill-td2 {
+  width: 160px;
+  color: #000;
+  background-color:#fff;
+  border: solid 1px #666;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: 15px;
+  padding-right: 15px;
+  text-align: left;
+  font-weight: normal;
   }
 
   footer {
