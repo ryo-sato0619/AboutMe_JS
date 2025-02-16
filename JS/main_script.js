@@ -150,4 +150,4 @@ window.onload = function() {
 
         });
     }
-});
+};
