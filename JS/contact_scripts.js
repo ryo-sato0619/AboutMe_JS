@@ -9,7 +9,7 @@ document.getElementById('contact-form').addEventListener('submit', function (eve
     };
 
     //サーバーにPOSTリクエストを送信
-    fetch('/send-email', {
+    fetch('/.netlify/functions/send-email', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
