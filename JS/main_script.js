@@ -2,8 +2,8 @@ console.log("JavaScriptファイルが読み込まれました"); // デバッ�
 
 import { createSupabaseClient } from './supabase_client.js';
 
-document.addEventListener("DOMContentLoaded", function() {
-    console.log("DOM fully loaded and parsed"); // デバッグ用
+window.onload = function() {
+    console.log("Window loaded fully"); // デバッグ用
 
     const pageUrl = window.location.pathname;
     console.log("Current page URL:", pageUrl); 
