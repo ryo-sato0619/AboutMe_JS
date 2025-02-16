@@ -1,71 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="ya">
     <head>
         <meta charset = "UTF-8">
         <meta name = "viewport" content = "width=device-width, initial-scale=1.0">
         <title>お問い合わせ</title>
         <link rel = "stylesheet" type = "text/css" href = "../CSS/style_contact.css">
     </head>
-    <!--ヘッダー-->
-    <header>
-        <nav>
-            <ul class = "menu">
-                <li class = "menu_li">
-                    <a href = "../index.html">ホーム</a>
-                </li>
-                <li class = "menu_li">
-                    <a href = "./about.html">自己紹介</a>
-                </li>
-                <li class = "menu_li">
-                    <a href = "./certification.html">保有資格</a>
-                </li>
-                <li class = "menu_li">
-                    <a href = "./skil.html">関わったスキル</a>
-                </li>
-                <li class = "menu_li">
-                    <a href = "./contact.html">お問い合わせ</a>
-                </li>
-            </ul>
-        </nav>
-    </header>
-
     <body>
-        <script src="../JS/contact.js"></script>
+        <!--ヘッダー-->
+        <header>
+            <nav>
+                <ul class = "menu">
+                    <li class = "menu_li">
+                        <a href = "../index.html">ホーム</a>
+                    </li>
+                    <li class = "menu_li">
+                        <a href = "./about.html">自己紹介</a>
+                    </li>
+                    <li class = "menu_li">
+                        <a href = "./certification.html">保有資格</a>
+                    </li>
+                    <li class = "menu_li">
+                        <a href = "./skil.html">関わったスキル</a>
+                    </li>
+                    <li class = "menu_li">
+                        <a href = "./contact.html">お問い合わせ</a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+
+        <!--メイン-->
+        <main>
+            <section class="main">
+                <h1 class="title">お問い合わせ</h1>
+                <p class="bottom_space"></p>
+                <p class="text-space">お問い合わせフォームです</p>
+                <p class="text-space">お問い合わせ内容を入力してください</p>
+            </section>
+
+            <div class="contact-form">
+                <form id="contact-form" action="/send-email" method="POST">
+                    <label for="name">お名前</label>
+                    <input type="text" id="name" name="name" required>
+                    <label for="email">メールアドレス(任意)</label>
+                    <input type="email" id="email" name="email">
+                    <label for="message">お問い合わせ内容</label>
+                    <textarea id="message" name="message" required></textarea>
+                    <button type="submit">送信</button>
+
+                    <!--注意書きゾーン-->
+                    <div class="form-note">
+                        <p>メールアドレスは任意ですが、返信が必要な場合は記入してください</p>
+                        <p>お名前、お問い合わせ内容は必須です</p>
+                        <p>ご提供頂いた情報は、適切に管理させて頂きます</p>
+                    </div>
+                </form>
+            </div>
+
+        </main>
+        <!--フッター-->
+        <footer>
+            <div class="footer-container">
+                <p>© 2025 Ryo Sato All rights reserved.</p>
+            </div>
+        </footer>
     </body>
-
-    <!--メイン-->
-    <main>
-        <section class="main">
-            <h1 class="title">お問い合わせ</h1>
-            <p class="bottom_space"></p>
-            <p class="text-space">お問い合わせフォームです</p>
-            <p class="text-space">お問い合わせ内容を入力してください</p>
-        </section>
-
-        <div class="contact-form">
-            <form id="contact-form" action="/send-email" method="POST">
-                <label for="name">お名前</label>
-                <input type="text" id="name" name="name" required>
-                <label for="email">メールアドレス(任意)</label>
-                <input type="email" id="email" name="email">
-                <label for="message">お問い合わせ内容</label>
-                <textarea id="message" name="message" required></textarea>
-                <button type="submit">送信</button>
-
-                <!--注意書きゾーン-->
-                <div class="form-note">
-                    <p>メールアドレスは任意ですが、返信が必要な場合は記入してください</p>
-                    <p>お名前、お問い合わせ内容は必須です</p>
-                    <p>ご提供頂いた情報は、適切に管理させて頂きます</p>
-                </div>
-            </form>
-        </div>
-
-    </main>
-    <!--フッター-->
-    <footer>
-        <div class="footer-container">
-            <p>© 2025 Ryo Sato All rights reserved.</p>
-        </div>
-    </footer>
 </html>
