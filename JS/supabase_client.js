@@ -1,6 +1,6 @@
 export async function getSupabaseConfig() {
     try {
-      const response = await fetch('http://localhost:3000/config'); // クライアント側からサーバーの/configエンドポイントにアクセス
+      const response = await fetch('/.netlify/functions/config');
       if (!response.ok) {
         console.error('Failed to fetch config:', response.status, response.statusText);
         return {};
