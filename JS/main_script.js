@@ -3,16 +3,20 @@ console.log("JavaScriptファイルが読み込まれました"); // デバッ�
 import { createSupabaseClient } from './supabase_client.js';
 
 document.addEventListener("DOMContentLoaded", function() {
+    console.log("DOM fully loaded and parsed"); // デバッグ用
 
     const pageUrl = window.location.pathname;
+    console.log("Current page URL:", pageUrl); 
 
     //資格ページなら
     if (pageUrl.includes('certification.html')) {
+        console.log("Certification page detected"); 
         //資格ページ情報を表示
         displayCert();
     }
     //スキル・経験ページなら
     else if (pageUrl.includes('skil.html')) {
+        console.log("Skill page detected"); 
         //スキル・経験情報を表示
         displaySkill();
     }
