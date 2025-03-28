@@ -8,57 +8,68 @@
     </head>
     <main>
         <p>
-            Sub CreateBubbleChartAutomatically()
-    Dim ws As Worksheet
-    Dim chObj As ChartObject
-    Dim ch As Chart
-    Dim lastRow As Long
-    Dim i As Long
-    Dim seriesName As String
-    Dim xVal As Variant, yVal As Variant
-    Dim bubbleSize As Variant
-    
-    ' データがあるシートを設定（適宜変更してください）
-    Set ws = ThisWorkbook.Sheets("Data") ' 例：シート名「Data」
-    
-    ' 最終行をA列から判定（1列目のデータに基づく）
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    
-    ' チャートオブジェクトをシートに追加
-    Set chObj = ws.ChartObjects.Add(Left:=300, Top:=10, Width:=500, Height:=300)
-    Set ch = chObj.Chart
-    
-    ' チャートの種類をバブルチャートに設定
-    ch.ChartType = xlBubble
-    
-    ' チャートタイトル設定（必要なら）
-    ch.HasTitle = True
-    ch.ChartTitle.Text = "メンズ利用可能なヘッドスパなどの散布図" ' 例：内容に合わせて変更
-    
-    ' 各行ごとにシリーズを追加：ここではヘッダー行が1行目なら、2行目からループ
-    For i = 2 To lastRow
-        seriesName = ws.Cells(i, "A").Value   ' 人の名前
-        xVal = ws.Cells(i, "G").Value           ' Xの値
-        yVal = ws.Cells(i, "N").Value           ' Yの値
-        bubbleSize = 10                         ' 固定値、または別セル参照
-        
-        With ch.SeriesCollection.NewSeries
-            .Name = seriesName
-            ' 単一のデータポイントとして追加（X, Y, Bubble Size）
-            .XValues = Array(xVal)
-            .Values = Array(yVal)
-            .BubbleSizes = Array(bubbleSize)
-        End With
-    Next i
-    
-    ' 軸の設定等（必要に応じて追加設定してください）
-    ch.Axes(xlCategory).HasTitle = True
-    ch.Axes(xlCategory).AxisTitle.Text = "Xの値"
-    ch.Axes(xlValue).HasTitle = True
-    ch.Axes(xlValue).AxisTitle.Text = "Yの値"
-    
-    MsgBox "バブルチャートが作成されました。", vbInformation, "完了"
-End Sub
+            Sub ExtractDataBasedOnKey()
+            Dim keyValue As String
+            Dim srcWS As Worksheet, destWS As Worksheet
+            Dim srcRange As Range
+            Dim srcData As Variant, tempList() As Variant, finalOutput() As Variant
+            Dim lastRow As Long, i As Long, j As Long, outputRow As Long
+            Dim numRows As Long
+            Dim columnIndices As Variant
+            
+            ' キーとなる文字を、アクティブシートのV4から取得
+            keyValue = ActiveSheet.Range("V4").Value
+            
+            ' シートの指定（「情報集約用」からデータ取得、「グラフ用」に貼付け）
+            Set srcWS = ThisWorkbook.Sheets("情報集約用")
+            Set destWS = ThisWorkbook.Sheets("グラフ用")
+            
+            ' 「情報集約用」シートのC列の最終行を取得 (※C列が必ず値として使われる前提)
+            lastRow = srcWS.Cells(srcWS.Rows.Count, "C").End(xlUp).Row
+            
+            ' 3行目から最終行までの範囲。今回はA~N列（14列）を一括取得する
+            Set srcRange = srcWS.Range("A3:N" & lastRow)
+            srcData = srcRange.Value  ' srcDataは2次元配列 (1 to numRows, 1 to 14)
+            
+            ' 取得する列：A, B, C, D, E, F, G, N → 列番号 1, 2, 3, 4, 5, 6, 7, 14
+            columnIndices = Array(1, 2, 3, 4, 5, 6, 7, 14)
+            
+            ' 最大行数は取得範囲の行数
+            numRows = UBound(srcData, 1)
+            
+            ' 一時的な出力配列を初期化（最大 numRows 行分のデータがあると仮定）
+            ReDim tempList(1 To numRows, 1 To UBound(columnIndices) + 1)
+            outputRow = 0
+            
+            ' 3行目が配列の1行目に相当するので、全行ループ
+            ' キーワードは「情報集約用」シートのC列（配列の3列目）の値と比較
+            For i = 1 To numRows
+                If CStr(srcData(i, 3)) = keyValue Then
+                    outputRow = outputRow + 1
+                    For j = LBound(columnIndices) To UBound(columnIndices)
+                        tempList(outputRow, j + 1) = srcData(i, columnIndices(j))
+                    Next j
+                End If
+            Next i
+            
+            If outputRow = 0 Then
+                MsgBox "一致するデータが見つかりませんでした。", vbInformation, "完了"
+                Exit Sub
+            End If
+            
+            ' 出力配列を実際の抽出件数にリサイズ
+            ReDim finalOutput(1 To outputRow, 1 To UBound(columnIndices) + 1)
+            For i = 1 To outputRow
+                For j = 1 To UBound(columnIndices) + 1
+                    finalOutput(i, j) = tempList(i, j)
+                Next j
+            Next i
+            
+            ' シート「グラフ用」のA3セルを起点に結果を貼り付け
+            destWS.Range("A3").Resize(outputRow, UBound(columnIndices) + 1).Value = finalOutput
+            
+            MsgBox outputRow & " 行のデータを抽出して貼り付けました。", vbInformation, "完了"
+        End Sub        
 
         </p>
     </main>
