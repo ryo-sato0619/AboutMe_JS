@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>メモ</title>
+        <link rel="stylesheet" type="text/css" href="../CSS/style_about.css">
+    </head>
+    <main>
+        <p>
+            Sub CreateBubbleChartAutomatically()
+    Dim ws As Worksheet
+    Dim chObj As ChartObject
+    Dim ch As Chart
+    Dim lastRow As Long
+    Dim i As Long
+    Dim seriesName As String
+    Dim xVal As Variant, yVal As Variant
+    Dim bubbleSize As Variant
+    
+    ' データがあるシートを設定（適宜変更してください）
+    Set ws = ThisWorkbook.Sheets("Data") ' 例：シート名「Data」
+    
+    ' 最終行をA列から判定（1列目のデータに基づく）
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' チャートオブジェクトをシートに追加
+    Set chObj = ws.ChartObjects.Add(Left:=300, Top:=10, Width:=500, Height:=300)
+    Set ch = chObj.Chart
+    
+    ' チャートの種類をバブルチャートに設定
+    ch.ChartType = xlBubble
+    
+    ' チャートタイトル設定（必要なら）
+    ch.HasTitle = True
+    ch.ChartTitle.Text = "メンズ利用可能なヘッドスパなどの散布図" ' 例：内容に合わせて変更
+    
+    ' 各行ごとにシリーズを追加：ここではヘッダー行が1行目なら、2行目からループ
+    For i = 2 To lastRow
+        seriesName = ws.Cells(i, "A").Value   ' 人の名前
+        xVal = ws.Cells(i, "G").Value           ' Xの値
+        yVal = ws.Cells(i, "N").Value           ' Yの値
+        bubbleSize = 10                         ' 固定値、または別セル参照
+        
+        With ch.SeriesCollection.NewSeries
+            .Name = seriesName
+            ' 単一のデータポイントとして追加（X, Y, Bubble Size）
+            .XValues = Array(xVal)
+            .Values = Array(yVal)
+            .BubbleSizes = Array(bubbleSize)
+        End With
+    Next i
+    
+    ' 軸の設定等（必要に応じて追加設定してください）
+    ch.Axes(xlCategory).HasTitle = True
+    ch.Axes(xlCategory).AxisTitle.Text = "Xの値"
+    ch.Axes(xlValue).HasTitle = True
+    ch.Axes(xlValue).AxisTitle.Text = "Yの値"
+    
+    MsgBox "バブルチャートが作成されました。", vbInformation, "完了"
+End Sub
+
+        </p>
+    </main>
+</html>
