@@ -1,1 +1,9 @@
-Install-Module -Name PnP.PowerShell -Scope CurrentUser -AllowClobber -Force -AcceptLicense
+# まず、既存のPnP.PowerShellをアンインストール
+Uninstall-Module -Name PnP.PowerShell -AllVersions -Force
+
+# PowerShell 5.1に対応するPnP.PowerShellバージョン1.12.0をインストール
+Install-Module -Name PnP.PowerShell -RequiredVersion 1.12.0 -Scope CurrentUser -AllowClobber -Force
+
+
+Import-Module PnP.PowerShell
+Connect-PnPOnline -Url "https://[あなたのテナント名].sharepoint.com/sites/[サイト名]"
