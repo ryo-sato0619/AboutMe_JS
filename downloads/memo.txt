@@ -93,3 +93,6 @@ Connect-PnPOnline -Url "https://[あなたのテナント名].sharepoint.com/sit
 
 https://sharepoint.stackexchange.com/questions/312487/how-to-prevent-downloading-but-allow-editing-files-and-folders-in-microsoft-team
 https://www.systools.in/blog/prevent-users-from-downloading-files-in-sharepoint-online/
+
+Connect-PnPOnline -Url "https://yourtenant.sharepoint.com/sites/your_site" -UseWebLogin -Browser Edge
+#                       ↑ -Browser の 'B' が大文字になっているか
