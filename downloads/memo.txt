@@ -101,3 +101,38 @@ $yammerLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Name=
 -----
 
 これらのコマンドは、PnP.PowerShellのバージョンに依存せず、Microsoft 365の統合監査ログの基盤に直接問い合わせるものです。PnP.PowerShell v1.1.2の環境でも、Exchange Online PowerShell v2 モジュールがインストール・接続されていれば、上記のコマンドは問題なく実行できるはずです。
+
+# 期間を指定 (例: 2025年7月1日から7月14日まで)
+$startDate = Get-Date -Date "2025-07-01T00:00:00Z"
+$endDate = Get-Date -Date "2025-07-14T23:59:59Z"
+
+# 検索したいSharePointサイトのベースURL (例: "https://yourtenant.sharepoint.com/sites/YourSiteName")
+$targetSharePointBaseUrl = "https://yourtenant.sharepoint.com/sites/MyProject"
+
+# 監査ログを検索
+$auditLogs = Search-UnifiedAuditLog -StartDate $startDate -EndDate $endDate `
+    -Workloads "SharePoint" `
+    -Operations "FileAccessed", "FileDownloaded", "FileUploaded", "FileDeleted", "PageView", "SharingSet" `
+    -ResultSize Unlimited # Unlimited は多くのログを取得する場合に必要ですが、時間がかかります
+
+# 取得したログから、AuditData の JSON 内にある SiteUrl でフィルターします。
+# AuditData を ConvertFrom-Json でオブジェクトに変換してから、SiteUrl プロパティで比較します。
+$filteredLogs = $auditLogs | Where-Object {
+    try {
+        # AuditData が null でないか、または有効なJSON文字列であるか確認
+        $auditDataObj = $_.AuditData | ConvertFrom-Json
+        # SiteUrl プロパティが存在し、かつターゲットURLに一致するか確認
+        $auditDataObj.SiteUrl -like "*$($targetSharePointBaseUrl)*"
+    }
+    catch {
+        # JSON変換エラーやプロパティが存在しない場合は、このログをスキップ
+        $false
+    }
+}
+
+# 結果の表示例 (必要に応じて詳細プロパティを指定してください)
+# ここでも再度 ConvertFrom-Json を使って表示用に整形します。
+$filteredLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Name='SiteUrl'; Expression={($_.AuditData | ConvertFrom-Json).SiteUrl}} | Format-Table
+
+# 必要に応じて CSV にエクスポート
+# $filteredLogs | Export-Csv -Path "C:\temp\SharePointAuditLog_URL.csv" -NoTypeInformation -Encoding UTF8
