@@ -150,3 +150,132 @@ Switch(
     // その他の予期せぬ値の場合（必要に応じて）
     Notify("無効な選択です。もう一度お試しください。", NotificationType.Warning) // 警告メッセージを表示
 )
+
+Power Apps で TextInput の情報を SharePoint や Microsoft Lists のリストに格納し、さらに TextInput がデフォルト値や空白の場合にエラーを出す方法ですね。承知いたしました。
+
+これを実現するには、主に以下の関数とロジックを使用します。
+
+  * **`Patch` 関数**: SharePoint/Lists に新しいアイテムを作成したり、既存のアイテムを更新したりするために使います。
+  * **`IsBlank` 関数**: TextInput が空白かどうかをチェックするために使います。
+  * **`Notify` 関数**: エラーメッセージや成功メッセージをユーザーに表示するために使います。
+  * **`If` 関数**: 条件分岐（TextInputが空白/デフォルト値かどうかのチェック）を行うために使います。
+
+以下に具体的な設定手順と例文を示します。
+
+-----
+
+### 1\. SharePoint / Microsoft Lists の準備
+
+まず、データを格納するためのリストが必要です。
+
+  * SharePoint サイトまたは Microsoft Lists に新しいリストを作成します。
+  * 例えば、以下のような列（カラム）を作成します。
+      * **タイトル** (既定で存在する列) - シングルテキスト行
+      * **アクセス数** (数値) - 数値列
+      * **備考** (複数行テキスト) - 複数行テキスト列
+
+### 2\. Power Apps アプリの準備
+
+1.  **データソースの追加:**
+
+      * Power Apps Studio で、左側のナビゲーションから「データ」アイコン（円柱のようなアイコン）をクリックします。
+      * 「データの追加」をクリックし、「SharePoint」または「Microsoft Lists」を選択します。
+      * 接続したいサイトを選択し、作成したリスト（例: `MyDataList`）を選択して「接続」をクリックします。
+
+2.  **コントロールの配置:**
+
+      * 画面に、データを入力するための **TextInput** コントロールを配置します。
+          * 例:
+              * `TextInput_Title` (タイトル入力用)
+              * `TextInput_AccessCount` (アクセス数入力用)
+              * `TextInput_Notes` (備考入力用)
+      * データをリストに保存するための **Button** コントロールを配置します。（例: `Button_Submit`）
+
+### 3\. TextInput のデフォルト値とエラーチェック
+
+TextInput がデフォルト値や空白の場合にエラーを出すロジックを、ボタンの `OnSelect` プロパティに記述します。
+
+#### 例文: `Button_Submit` の `OnSelect` プロパティ
+
+以下のコードを、`Button_Submit` コントロールの `OnSelect` プロパティに設定してください。
+
+```powerapps
+// (1) 入力値のバリデーション（検証）
+// TextInput_Title が空白、またはデフォルトの "Text input" のままの場合
+If(
+    IsBlank(TextInput_Title.Text) || TextInput_Title.Text = "Text input",
+    Notify("タイトルを入力してください。", NotificationType.Error), // エラーメッセージを表示
+    
+    // TextInput_AccessCount が空白、またはデフォルトの "Text input" のままの場合
+    IsBlank(TextInput_AccessCount.Text) || TextInput_AccessCount.Text = "Text input",
+    Notify("アクセス数を入力してください。", NotificationType.Error),
+    
+    // (2) バリデーションが全てOKだった場合のみ、SharePointリストにデータを格納
+    // Patch関数を使って新しいアイテムを作成します。
+    Patch(
+        MyDataList, // 接続したSharePointリストの名前
+        Defaults(MyDataList), // 新しいアイテムを作成することを示す
+        {
+            // リストの列名: TextInputのTextプロパティ
+            Title: TextInput_Title.Text, // タイトル列にTextInput_Titleの値を格納
+            AccessCount: Value(TextInput_AccessCount.Text), // アクセス数列にTextInput_AccessCountの値を数値に変換して格納
+            Notes: TextInput_Notes.Text // 備考列にTextInput_Notesの値を格納
+        }
+    );
+    
+    // データ格納後の処理（例: 成功メッセージ表示、入力値のリセット、画面遷移）
+    Notify("データが正常に保存されました。", NotificationType.Success); // 成功メッセージを表示
+    Reset(TextInput_Title); // TextInput_Title をデフォルト値に戻す
+    Reset(TextInput_AccessCount); // TextInput_AccessCount をデフォルト値に戻す
+    Reset(TextInput_Notes); // TextInput_Notes をデフォルト値に戻す
+    // Navigate(ScreenSuccess, ScreenTransition.Fade); // 成功画面に遷移したい場合
+)
+```
+
+-----
+
+### コードの解説
+
+1.  **`If(...)` 関数:**
+
+      * `If` 関数は、複数の条件を順番に評価し、最初に `true` になった条件に対応する処理を実行します。
+      * `If(条件1, 処理1, 条件2, 処理2, ..., 最後の処理)` の形式で使っています。
+      * もし `条件1` が `true` なら `処理1` を実行し、そこで `If` 関数は終了します。
+      * `条件1` が `false` なら `条件2` を評価し、`true` なら `処理2` を実行します。
+      * 全ての条件が `false` だった場合、最後の処理（この場合は `Patch` 関数とそれに続く成功処理）が実行されます。
+
+2.  **`IsBlank(TextInput_Title.Text)`:**
+
+      * `IsBlank()` 関数は、指定された値が空白（空の文字列、null、または未定義）である場合に `true` を返します。
+      * `TextInput_Title.Text` は、`TextInput_Title` コントロールに入力されているテキストの値を取得します。
+
+3.  **`TextInput_Title.Text = "Text input"`:**
+
+      * これは、TextInput コントロールの**初期のプレースホルダーテキスト**がそのまま残っているかをチェックしています。
+      * Power AppsのTextInputコントロールは、デフォルトで「Text input」というプレースホルダーが表示されるため、ユーザーが何も入力せずにそのまま残している場合にこれを検知できます。
+      * もし、TextInputの `HintText` プロパティを自分で「タイトルを入力」などに変更している場合は、その変更後のテキストと比較するように修正してください。
+          * 例: `TextInput_Title.Text = "タイトルを入力"`
+
+4.  **`Notify("メッセージ", NotificationType.種類)`:**
+
+      * 画面の上部に一時的に通知メッセージを表示します。
+      * `NotificationType.Error`: 赤色のエラーメッセージ。
+      * `NotificationType.Warning`: 黄色の警告メッセージ。
+      * `NotificationType.Success`: 緑色の成功メッセージ。
+      * `NotificationType.Information`: 青色の情報メッセージ。
+
+5.  **`Patch(MyDataList, Defaults(MyDataList), { ... })`:**
+
+      * `Patch` 関数は、データソース（`MyDataList`）に対してデータを変更（追加または更新）します。
+      * `Defaults(MyDataList)`: これを指定することで、`MyDataList` に**新しい行（アイテム）を追加する**ことを指示します。
+      * `{ Title: TextInput_Title.Text, ... }`: 波括弧 `{}` の中に、リストの列名と、そこに入力したいコントロールの値をペアで記述します。
+          * `Title`: SharePointリストの「タイトル」列です。
+          * `AccessCount`: SharePointリストの「アクセス数」列です。
+          * `Value(TextInput_AccessCount.Text)`: `TextInput` から取得される値は常にテキストなので、数値列に格納する場合は `Value()` 関数を使って**数値に変換する**必要があります。変換できない場合はエラーになるので注意してください。
+          * `Notes`: SharePointリストの「備考」列です。
+
+6.  **`Reset(TextInput_Title)`:**
+
+      * `Reset()` 関数は、指定されたコントロールをその初期状態（`Default` プロパティの値）に戻します。これにより、データ保存後にTextInputの入力内容をクリアできます。
+
+この設定で、ユーザーが必須項目を適切に入力しない限りデータを保存せず、エラーメッセージを表示する堅牢なアプリを作成できます。
