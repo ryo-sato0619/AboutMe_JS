@@ -136,3 +136,17 @@ $filteredLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Nam
 
 # 必要に応じて CSV にエクスポート
 # $filteredLogs | Export-Csv -Path "C:\temp\SharePointAuditLog_URL.csv" -NoTypeInformation -Encoding UTF8
+
+
+
+Switch(
+    Dropdown1.Selected.Value, // ドロップダウンで選択された項目の 'Value' を評価
+    "apple", Navigate(ScreenApple, ScreenTransition.Fade), // 'apple' が選択されたら ScreenApple へ
+    "banana", Navigate(ScreenBanana, ScreenTransition.Fade), // 'banana' が選択されたら ScreenBanana へ
+    "orange", Navigate(ScreenOrange, ScreenTransition.Fade), // 'orange' が選択されたら ScreenOrange へ
+    // 以下は、何も選択されていない場合や、予期せぬ値が選択された場合の処理
+    Blank(),    // '選択してください'（ValueがBlank）の場合
+        Notify("項目を選択してください。", NotificationType.Error), // エラーメッセージを表示
+    // その他の予期せぬ値の場合（必要に応じて）
+    Notify("無効な選択です。もう一度お試しください。", NotificationType.Warning) // 警告メッセージを表示
+)
