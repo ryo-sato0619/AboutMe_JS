@@ -279,3 +279,140 @@ If(
       * `Reset()` 関数は、指定されたコントロールをその初期状態（`Default` プロパティの値）に戻します。これにより、データ保存後にTextInputの入力内容をクリアできます。
 
 この設定で、ユーザーが必須項目を適切に入力しない限りデータを保存せず、エラーメッセージを表示する堅牢なアプリを作成できます。
+
+
+
+
+おー、それは良かったです！お役に立てて嬉しいです。
+
+最後にメールアドレスの入力チェックですね。特定のドメイン以外を受け付けないようにしつつ、入力がない場合と形式が違う場合でメッセージを分けたいとのこと、承知いたしました。
+
+これは、**`If` 関数**と\*\*`IsBlank` 関数**に加えて、メールアドレスの形式をチェックするための**パターン照合関数\*\*（`IsMatch` や正規表現）を組み合わせることで実現できます。
+
+-----
+
+## メールアドレス形式のチェックと入力なしの区別
+
+メールアドレスの形式チェックには、`IsMatch` 関数を使うのが最も強力で正確です。`IsMatch` は、入力されたテキストが特定のパターン（正規表現というルール）に合っているかをチェックできます。
+
+### 前提
+
+  * メールアドレス入力用の `TextInput` コントロールがあること。（例: `TextInput_Email`）
+  * 受け付けたいドメイン（例: `@example.com` や `@yourcompany.co.jp` など）が決まっていること。
+
+### 例文: `Button_Submit` の `OnSelect` プロパティ
+
+以下のコードを、あなたの `Button_Submit` コントロールの `OnSelect` プロパティに組み込んでください。
+
+```powerapps
+// (1) 入力値のバリデーション（検証）
+
+// TextInput_Title のバリデーション
+If(
+    IsBlank(TextInput_Title.Text) || TextInput_Title.Text = "Text input",
+    Notify("タイトルを入力してください。", NotificationType.Error),
+    
+    // TextInput_AccessCount のバリデーション
+    IsBlank(TextInput_AccessCount.Text) || TextInput_AccessCount.Text = "Text input",
+    Notify("アクセス数を入力してください。", NotificationType.Error),
+    
+    // ドロップダウンのバリデーション
+    IsBlank(
+        LookUp(
+            Table(
+                { DisplayText: "選択してください", Value: Blank() },
+                { DisplayText: "公開", Value: 1 },
+                { DisplayText: "非公開", Value: 2 },
+                { DisplayText: "一部公開", Value: 3 }
+            ),
+            DisplayText = Dropdown_Privacy.Selected
+        ).Value
+    ), 
+    Notify("公開設定を選択してください。", NotificationType.Error),
+
+    // --- ここからメールアドレスのバリデーション ---
+    // TextInput_Email が空白かどうかをチェック
+    IsBlank(TextInput_Email.Text),
+    Notify("メールアドレスを入力してください。", NotificationType.Error), // 空白の場合のメッセージ
+    
+    // TextInput_Email が特定のドメイン形式に合致するかどうかをチェック
+    // '@example.com' と '@yourcompany.co.jp' の両方を許可する場合の例
+    !IsMatch(
+        TextInput_Email.Text,
+        // 正規表現: アルファベット、数字、記号（. % + - _）の後に @ が来て、
+        // その後に 'example.com' または 'yourcompany.co.jp' で終わる
+        // i は大文字小文字を区別しないことを意味します
+        "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:example.com|yourcompany.co.jp)$",
+        MatchOptions.IgnoreCase // ドメイン名の大文字・小文字を区別しない
+    ),
+    Notify("有効なメールアドレス（@example.com または @yourcompany.co.jp ドメイン）を入力してください。", NotificationType.Error), // 形式が違う場合のメッセージ
+    // --- メールアドレスのバリデーションここまで ---
+    
+    // (2) バリデーションが全てOKだった場合のみ、SharePointリストにデータを格納
+    Patch(
+        MyDataList,
+        Defaults(MyDataList),
+        {
+            Title: TextInput_Title.Text,
+            AccessCount: Value(TextInput_AccessCount.Text),
+            Notes: TextInput_Notes.Text,
+            PrivacySetting: LookUp(
+                Table(
+                    { DisplayText: "選択してください", Value: Blank() },
+                    { DisplayText: "公開", Value: 1 },
+                    { DisplayText: "非公開", Value: 2 },
+                    { DisplayText: "一部公開", Value: 3 }
+                ),
+                DisplayText = Dropdown_Privacy.Selected
+            ).Value,
+            EmailAddress: TextInput_Email.Text // SharePointリストにメールアドレス列を追加していると仮定
+        }
+    );
+    
+    // データ格納後の処理
+    Notify("データが正常に保存されました。", NotificationType.Success);
+    Reset(TextInput_Title);
+    Reset(TextInput_AccessCount);
+    Reset(TextInput_Notes);
+    Reset(Dropdown_Privacy);
+    Reset(TextInput_Email); // メールアドレスもリセット
+    // Navigate(ScreenSuccess, ScreenTransition.Fade);
+)
+```
+
+-----
+
+### コードの解説
+
+1.  **`IsBlank(TextInput_Email.Text)`**
+
+      * これは、メールアドレスの入力欄(`TextInput_Email`)が**完全に空っぽ**であるかをチェックします。
+      * `true` の場合、「メールアドレスを入力してください。」というエラーメッセージを表示します。
+
+2.  **`!IsMatch(TextInput_Email.Text, "...", MatchOptions.IgnoreCase)`**
+
+      * `IsMatch()` 関数は、最初の引数（`TextInput_Email.Text`）が、2番目の引数で指定された**正規表現パターン**に合致するかどうかをチェックします。
+      * `!` (感嘆符) は「ではない」という意味で、パターンに**合致しない場合**に `true` になります。つまり、形式が正しくない場合にエラーを出します。
+      * **正規表現パターン (`"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}\~-]+@(?:example.com|yourcompany.co.jp)$"\`)**：
+          * `^`: 文字列の始まり
+          * `[a-zA-Z0-9.!#$%&'*+/=?^_`{|}\~-]+` :  `@\` の前の部分（ユーザー名など）で使える文字（アルファベット、数字、特定の記号）を1文字以上
+          * `@`: アットマーク
+          * `(?:example.com|yourcompany.co.jp)`: `example.com` または `yourcompany.co.jp` のいずれか
+              * `|` は「または」を意味します。複数のドメインを許可したい場合は、`domain1|domain2|domain3` のように `|` で区切って列挙します。
+          * `$`: 文字列の終わり
+          * このパターンは、「`@`の前に何か文字があり、`@`の後に指定したドメインが来て、そこで終わる」という形式に厳密に合致するかをチェックします。
+      * `MatchOptions.IgnoreCase`: ドメイン名の大文字・小文字を区別せずに照合します。（例: `Example.com` でも `example.com` と同じとみなす）
+      * このチェックは、`IsBlank` のチェックが `false`（つまり何か入力されている）だった場合にのみ実行されます。
+
+3.  **`Notify()` メッセージの使い分け:**
+
+      * `IsBlank` の条件で「メールアドレスを入力してください。」
+      * `!IsMatch` の条件で「有効なメールアドレス（...ドメイン）を入力してください。」
+      * このように条件を分けることで、ユーザーに具体的なエラー内容を伝えられます。
+
+### SharePoint/Listsへの格納
+
+  * `EmailAddress: TextInput_Email.Text`
+      * SharePoint/Lists に、メールアドレスを保存するための「**EmailAddress**」のような列（単一行テキスト型が適切です）を作成しておけば、そこに値を格納できます。
+
+この方法で、メールアドレスの入力チェックと、指定ドメインの固定化、そしてメッセージの区別が実現できます。試してみてください！
