@@ -500,3 +500,12 @@ Power Apps でフォームの送信ボタンが押された際に、Power Automa
 この手順で Power Apps と Power Automate を連携させることで、ユーザーに SharePoint リストへの直接的な編集権限を与えることなく、安全かつ確実にフォームからのデータ登録を実現できます。
 
 何か詰まった点や、さらに詳細な説明が必要な場合は、お気軽にご質問ください。
+
+
+
+{
+  "query": "Service=Microsoft365ComplianceAudit&Operations=FileAccessed",
+  "startTime": "@{formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-ddT00:00:00Z')}",
+  "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
+  "limit": 50000
+}
