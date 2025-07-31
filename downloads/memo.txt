@@ -509,3 +509,10 @@ Power Apps でフォームの送信ボタンが押された際に、Power Automa
   "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
   "limit": 50000
 }
+
+# まず、対象のSharePointサイトに接続する
+# 例: サイトのURLが https://yourtenant.sharepoint.com/sites/YourSite の場合
+Connect-PnPOnline -Url "https://yourtenant.sharepoint.com/sites/YourSite" -Interactive
+
+# 接続後、サイト内のすべてのリストを取得して表示名を確認
+Get-PnPList | Select Title, Id, Hidden, @{Name="Url"; Expression={$_.Context.Url + $_.DefaultViewUrl}}
