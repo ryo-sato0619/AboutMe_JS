@@ -1,507 +1,98 @@
-了解しました！PnP.PowerShellのバージョン1.1.2を使用する前提ですね。
+【基本設計】
 
-バージョン1.1.2は、現在のPnP.PowerShellの最新版とは異なります。このため、最新版で使える一部のパラメータや機能は、1.1.2では利用できない場合があります。特に認証関連のコマンドは、バージョンアップによって変更されることが多いため、それに留意した上でコマンドをご案内します。
+1. 全体アーキテクチャ図
+コード スニペット
 
------
+graph TD
+    subgraph Log Sources
+        A[Microsoft Purview Audit Logs] -->|Microsoft Graph Security API (with Pagination)| B(Logic App)
+        C[Intune Audit Logs] -->|Microsoft Graph API| B
+    end
 
-### PnP.PowerShell v1.1.2での監査ログ取得方法
+    subgraph Azure
+        B --Trigger: Daily--> D(Logic App)
+        D --Authenticate with Managed Identity--> E(Azure Blob Storage)
+        E --Lifecycle Management Policy--> F(Deletion after 3 years)
+        D --On Failure / On Success--> G(Office 365 Outlook / SendGrid)
+    end
 
-PnP.PowerShell v1.1.2 では、統合監査ログ (`Search-UnifiedAuditLog`) を直接呼び出す専用のコマンドレットは提供されていません。そのため、Microsoft Purview の監査ログを取得するには、**Exchange Online PowerShell (v2モジュール)** を使用する必要があります。これはPnP.PowerShellとは別のモジュールですが、監査ログの取得にはこちらを利用するのが標準的な方法です。
+    subgraph Monitoring
+        D --Logs--> H(Azure Monitor Logs)
+        H --Alert Rule--> G
+    end
 
-PnP.PowerShellは、主にSharePoint OnlineやMicrosoft Teamsなどの構成管理に特化しており、監査ログの取得はMicrosoft 365のコンプライアンスセンターが提供する基盤（Unified Audit Log）から直接行う形になります。
+    G[Mailing List]
+2. コンポーネント詳細
+2.1. 監査ログ取得元
+2.1.1. Microsoft Purview 監査ログ
+取得方法:
 
------
+推奨: Microsoft Graph Security API (/security/auditLogs/query) を利用。
 
-#### 前提条件: Exchange Online PowerShell v2 モジュールへの接続
+件数制限対応: API応答に含まれる nextLink プロパティを利用したページネーションを実装し、指定された期間の全てのログを網羅的に取得します。Logic Apps の Until コントロールを使用して、nextLink がなくなるまでAPI呼び出しを繰り返します。
 
-監査ログを取得する前に、Exchange Online PowerShell v2 モジュールに接続してください。
+必要なAPIパーミッション: AuditLog.Read.All (Microsoft Graph Security API の場合)
 
-1.  **Exchange Online PowerShell v2 モジュールのインストール (まだの場合)**
-    管理者としてPowerShellを開き、以下のコマンドを実行します。
+2.1.2. Intune 監査ログ
+取得方法:
 
-    ```powersell
-    Install-Module -Name ExchangeOnlineManagement
-    ```
+推奨: Microsoft Graph API (/deviceManagement/auditEvents) を利用。
 
-2.  **Exchange Online PowerShell への接続**
-    以下のコマンドを実行し、Microsoft 365 の管理者アカウントでサインインします。
+件数制限対応: Purview と同様に、API応答に含まれる nextLink プロパティを利用したページネーションを実装し、全てのログを網羅的に取得します。
 
-    ```powershell
-    Connect-ExchangeOnline
-    # 多要素認証 (MFA) が有効な場合は Connect-ExchangeOnline -UserPrincipalName your.admin.account@yourdomain.com
-    ```
+必要なAPIパーミッション: DeviceManagementApps.Read.All, DeviceManagementConfiguration.Read.All, DeviceManagementManagedDevices.Read.All など、取得したいログの種類に応じた適切なパーミッション。
 
-    これにより、監査ログの取得に必要な `Search-UnifiedAuditLog` コマンドレットが利用可能になります。
+2.2. Logic Apps
+監査ログの取得、加工（CSV変換）、格納、および通知を自動化するワークフローを設計します。
 
------
+2.2.1. トリガー
+種類: Recurrence (繰り返し)
 
-#### 監査ログの取得パターン
+設定:
 
-##### 1\. URLと期間を指定して監査ログを取得する
+Frequency: Day
 
-特定のSharePointサイトのURLに関連する活動を期間指定で取得するには、`Search-UnifiedAuditLog` でログを取得した後、PowerShellの `Where-Object` を使って**監査データのJSON文字列内にあるURL**をフィルターします。
+Interval: 1
 
-```powershell
-# 期間を指定 (例: 2025年7月1日から7月14日まで)
-$startDate = Get-Date -Date "2025-07-01T00:00:00Z"
-$endDate = Get-Date -Date "2025-07-14T23:59:59Z"
+At these hours: 20 (日本時間の午後8時)
 
-# 検索したいSharePointサイトのベースURL (例: "https://yourtenant.sharepoint.com/sites/YourSiteName")
-$targetSharePointBaseUrl = "https://yourtenant.sharepoint.com/sites/MyProject"
+At these minutes: 0
 
-# 監査ログを検索
-# SharePoint関連の操作に絞り込むため、WorkloadsとOperationsを指定します。
-# PnP.PowerShell 1.1.2 の環境であっても、この部分は Exchange Online PowerShell の機能です。
-$auditLogs = Search-UnifiedAuditLog -StartDate $startDate -EndDate $endDate `
-    -Workloads "SharePoint" `
-    -Operations "FileAccessed", "FileDownloaded", "FileUploaded", "FileDeleted", "PageView", "SharingSet" `
-    -ResultSize Unlimited # Unlimited は多くのログを取得する場合に必要ですが、時間がかかります
+Time zone: (UTC+09:00) Osaka, Sapporo, Tokyo (日本標準時)
 
-# 取得したログから、AuditData の JSON 内にある SiteUrl でフィルターします。
-# AuditData は JSON 文字列なので、Contains で部分一致を検索します。
-$filteredLogs = $auditLogs | Where-Object { $_.AuditData -like "*\"SiteUrl\":\"*$($targetSharePointBaseUrl)*\"*" }
+2.2.2. 認証
+推奨: マネージドID (Managed Identity) を使用。
 
-# 結果の表示例 (必要に応じて詳細プロパティを指定してください)
-$filteredLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Name='SiteUrl'; Expression={($_.AuditData | ConvertFrom-Json).SiteUrl}} | Format-Table
+種類: システム割り当てマネージドID
 
-# 必要に応じて CSV にエクスポート
-# $filteredLogs | Export-Csv -Path "C:\temp\SharePointAuditLog_URL.csv" -NoTypeInformation -Encoding UTF8
-```
+設定: Logic App リソースの「ID」ブレードで「システム割り当て済み」を「オン」に設定。
 
-**重要な注意点**:
+必要なロール割り当て:
 
-  * `AuditData` はJSON形式の文字列として返されるため、その中の特定のプロパティ（例: `SiteUrl`）でフィルターするには、`Where-Object { $_.AuditData -like "*\"SiteUrl\":\"*$($targetSharePointBaseUrl)*\"*" }` のように**文字列としてパターンマッチング**を行う必要があります。`ConvertFrom-Json` を挟むと処理が重くなるため、まずは文字列検索で絞り込み、その後で `Select-Object` 内で `ConvertFrom-Json` を使用して整形するのが効率的です。
-  * `Workloads "SharePoint"` と `Operations` パラメータで、関連するアクティビティを絞り込むことが重要です。
+Azure Blob Storage: Storage Blob データ共同作成者 または Storage Blob データ所有者 (コンテナーへの書き込み権限)。
 
------
+Microsoft Graph API: Azure AD アプリケーション登録を作成し、必要なAPIパーミッションを付与。Logic App のマネージドIDに、そのアプリケーション登録のサービスプリンシパルに対する適切なロール (例: アプリケーション所有者) を付与するか、Graph API 呼び出し時にマネージドIDで直接認証できるコネクタ/カスタムコネクタを使用。
 
-##### 2\. Yammerと期間を指定して監査ログを取得する
+マネージドIDが不可の場合の考慮:
 
-Yammer (現在の Viva Engage) の監査ログを期間指定で取得するには、`Search-UnifiedAuditLog` の `Workloads` パラメータで `"Yammer"` を指定します。
+個人に紐づく認証情報を使用する際は、専用のサービスアカウントやグループアカウントの利用を検討し、特定の個人への依存を減らします。
 
-```powershell
-# 期間を指定 (例: 2025年7月1日から7月14日まで)
-$startDate = Get-Date -Date "2025-07-01T00:00:00Z"
-$endDate = Get-Date -Date "2025-07-14T23:59:59Z"
+認証情報の定期的な棚卸しと更新プロセスを確立し、異動や退職に備えます。
 
-# Yammer の監査ログを検索
-# Yammer 関連の操作をさらに絞り込みたい場合は、Operations パラメータも併用します。
-# 例: "MessagePosted", "PostCreated", "MessageReplied", "GroupJoined" など
-$yammerLogs = Search-UnifiedAuditLog -StartDate $startDate -EndDate $endDate `
-    -Workloads "Yammer" `
-    -ResultSize Unlimited
+2.2.3. 監査ログ取得アクション
+アクション: HTTP アクション (Microsoft Graph Security API 呼び出し用)
 
-# 結果の表示例
-$yammerLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Name='ObjectId'; Expression={($_.AuditData | ConvertFrom-Json).ObjectId}}, @{Name='OperationName'; Expression={($_.AuditData | ConvertFrom-Json).OperationName}} | Format-Table
+設定例 (Purview の場合):
 
-# 必要に応じて CSV にエクスポート
-# $yammerLogs | Export-Csv -Path "C:\temp\YammerAuditLog.csv" -NoTypeInformation -Encoding UTF8
-```
+Method: POST (Graph Security APIの auditLogs/query はPOSTを使用)
 
------
+URI: https://graph.microsoft.com/v1.0/security/auditLogs/query
 
-これらのコマンドは、PnP.PowerShellのバージョンに依存せず、Microsoft 365の統合監査ログの基盤に直接問い合わせるものです。PnP.PowerShell v1.1.2の環境でも、Exchange Online PowerShell v2 モジュールがインストール・接続されていれば、上記のコマンドは問題なく実行できるはずです。
+Headers: Content-Type: application/json
 
-# 期間を指定 (例: 2025年7月1日から7月14日まで)
-$startDate = Get-Date -Date "2025-07-01T00:00:00Z"
-$endDate = Get-Date -Date "2025-07-14T23:59:59Z"
+Body: 取得したいログの条件を指定します。例えば、特定の日付範囲やオペレーションタイプなど。
 
-# 検索したいSharePointサイトのベースURL (例: "https://yourtenant.sharepoint.com/sites/YourSiteName")
-$targetSharePointBaseUrl = "https://yourtenant.sharepoint.com/sites/MyProject"
-
-# 監査ログを検索
-$auditLogs = Search-UnifiedAuditLog -StartDate $startDate -EndDate $endDate `
-    -Workloads "SharePoint" `
-    -Operations "FileAccessed", "FileDownloaded", "FileUploaded", "FileDeleted", "PageView", "SharingSet" `
-    -ResultSize Unlimited # Unlimited は多くのログを取得する場合に必要ですが、時間がかかります
-
-# 取得したログから、AuditData の JSON 内にある SiteUrl でフィルターします。
-# AuditData を ConvertFrom-Json でオブジェクトに変換してから、SiteUrl プロパティで比較します。
-$filteredLogs = $auditLogs | Where-Object {
-    try {
-        # AuditData が null でないか、または有効なJSON文字列であるか確認
-        $auditDataObj = $_.AuditData | ConvertFrom-Json
-        # SiteUrl プロパティが存在し、かつターゲットURLに一致するか確認
-        $auditDataObj.SiteUrl -like "*$($targetSharePointBaseUrl)*"
-    }
-    catch {
-        # JSON変換エラーやプロパティが存在しない場合は、このログをスキップ
-        $false
-    }
-}
-
-# 結果の表示例 (必要に応じて詳細プロパティを指定してください)
-# ここでも再度 ConvertFrom-Json を使って表示用に整形します。
-$filteredLogs | Select-Object CreationDate, UserIds, Operations, Workload, @{Name='SiteUrl'; Expression={($_.AuditData | ConvertFrom-Json).SiteUrl}} | Format-Table
-
-# 必要に応じて CSV にエクスポート
-# $filteredLogs | Export-Csv -Path "C:\temp\SharePointAuditLog_URL.csv" -NoTypeInformation -Encoding UTF8
-
-
-
-Switch(
-    Dropdown1.Selected.Value, // ドロップダウンで選択された項目の 'Value' を評価
-    "apple", Navigate(ScreenApple, ScreenTransition.Fade), // 'apple' が選択されたら ScreenApple へ
-    "banana", Navigate(ScreenBanana, ScreenTransition.Fade), // 'banana' が選択されたら ScreenBanana へ
-    "orange", Navigate(ScreenOrange, ScreenTransition.Fade), // 'orange' が選択されたら ScreenOrange へ
-    // 以下は、何も選択されていない場合や、予期せぬ値が選択された場合の処理
-    Blank(),    // '選択してください'（ValueがBlank）の場合
-        Notify("項目を選択してください。", NotificationType.Error), // エラーメッセージを表示
-    // その他の予期せぬ値の場合（必要に応じて）
-    Notify("無効な選択です。もう一度お試しください。", NotificationType.Warning) // 警告メッセージを表示
-)
-
-Power Apps で TextInput の情報を SharePoint や Microsoft Lists のリストに格納し、さらに TextInput がデフォルト値や空白の場合にエラーを出す方法ですね。承知いたしました。
-
-これを実現するには、主に以下の関数とロジックを使用します。
-
-  * **`Patch` 関数**: SharePoint/Lists に新しいアイテムを作成したり、既存のアイテムを更新したりするために使います。
-  * **`IsBlank` 関数**: TextInput が空白かどうかをチェックするために使います。
-  * **`Notify` 関数**: エラーメッセージや成功メッセージをユーザーに表示するために使います。
-  * **`If` 関数**: 条件分岐（TextInputが空白/デフォルト値かどうかのチェック）を行うために使います。
-
-以下に具体的な設定手順と例文を示します。
-
------
-
-### 1\. SharePoint / Microsoft Lists の準備
-
-まず、データを格納するためのリストが必要です。
-
-  * SharePoint サイトまたは Microsoft Lists に新しいリストを作成します。
-  * 例えば、以下のような列（カラム）を作成します。
-      * **タイトル** (既定で存在する列) - シングルテキスト行
-      * **アクセス数** (数値) - 数値列
-      * **備考** (複数行テキスト) - 複数行テキスト列
-
-### 2\. Power Apps アプリの準備
-
-1.  **データソースの追加:**
-
-      * Power Apps Studio で、左側のナビゲーションから「データ」アイコン（円柱のようなアイコン）をクリックします。
-      * 「データの追加」をクリックし、「SharePoint」または「Microsoft Lists」を選択します。
-      * 接続したいサイトを選択し、作成したリスト（例: `MyDataList`）を選択して「接続」をクリックします。
-
-2.  **コントロールの配置:**
-
-      * 画面に、データを入力するための **TextInput** コントロールを配置します。
-          * 例:
-              * `TextInput_Title` (タイトル入力用)
-              * `TextInput_AccessCount` (アクセス数入力用)
-              * `TextInput_Notes` (備考入力用)
-      * データをリストに保存するための **Button** コントロールを配置します。（例: `Button_Submit`）
-
-### 3\. TextInput のデフォルト値とエラーチェック
-
-TextInput がデフォルト値や空白の場合にエラーを出すロジックを、ボタンの `OnSelect` プロパティに記述します。
-
-#### 例文: `Button_Submit` の `OnSelect` プロパティ
-
-以下のコードを、`Button_Submit` コントロールの `OnSelect` プロパティに設定してください。
-
-```powerapps
-// (1) 入力値のバリデーション（検証）
-// TextInput_Title が空白、またはデフォルトの "Text input" のままの場合
-If(
-    IsBlank(TextInput_Title.Text) || TextInput_Title.Text = "Text input",
-    Notify("タイトルを入力してください。", NotificationType.Error), // エラーメッセージを表示
-    
-    // TextInput_AccessCount が空白、またはデフォルトの "Text input" のままの場合
-    IsBlank(TextInput_AccessCount.Text) || TextInput_AccessCount.Text = "Text input",
-    Notify("アクセス数を入力してください。", NotificationType.Error),
-    
-    // (2) バリデーションが全てOKだった場合のみ、SharePointリストにデータを格納
-    // Patch関数を使って新しいアイテムを作成します。
-    Patch(
-        MyDataList, // 接続したSharePointリストの名前
-        Defaults(MyDataList), // 新しいアイテムを作成することを示す
-        {
-            // リストの列名: TextInputのTextプロパティ
-            Title: TextInput_Title.Text, // タイトル列にTextInput_Titleの値を格納
-            AccessCount: Value(TextInput_AccessCount.Text), // アクセス数列にTextInput_AccessCountの値を数値に変換して格納
-            Notes: TextInput_Notes.Text // 備考列にTextInput_Notesの値を格納
-        }
-    );
-    
-    // データ格納後の処理（例: 成功メッセージ表示、入力値のリセット、画面遷移）
-    Notify("データが正常に保存されました。", NotificationType.Success); // 成功メッセージを表示
-    Reset(TextInput_Title); // TextInput_Title をデフォルト値に戻す
-    Reset(TextInput_AccessCount); // TextInput_AccessCount をデフォルト値に戻す
-    Reset(TextInput_Notes); // TextInput_Notes をデフォルト値に戻す
-    // Navigate(ScreenSuccess, ScreenTransition.Fade); // 成功画面に遷移したい場合
-)
-```
-
------
-
-### コードの解説
-
-1.  **`If(...)` 関数:**
-
-      * `If` 関数は、複数の条件を順番に評価し、最初に `true` になった条件に対応する処理を実行します。
-      * `If(条件1, 処理1, 条件2, 処理2, ..., 最後の処理)` の形式で使っています。
-      * もし `条件1` が `true` なら `処理1` を実行し、そこで `If` 関数は終了します。
-      * `条件1` が `false` なら `条件2` を評価し、`true` なら `処理2` を実行します。
-      * 全ての条件が `false` だった場合、最後の処理（この場合は `Patch` 関数とそれに続く成功処理）が実行されます。
-
-2.  **`IsBlank(TextInput_Title.Text)`:**
-
-      * `IsBlank()` 関数は、指定された値が空白（空の文字列、null、または未定義）である場合に `true` を返します。
-      * `TextInput_Title.Text` は、`TextInput_Title` コントロールに入力されているテキストの値を取得します。
-
-3.  **`TextInput_Title.Text = "Text input"`:**
-
-      * これは、TextInput コントロールの**初期のプレースホルダーテキスト**がそのまま残っているかをチェックしています。
-      * Power AppsのTextInputコントロールは、デフォルトで「Text input」というプレースホルダーが表示されるため、ユーザーが何も入力せずにそのまま残している場合にこれを検知できます。
-      * もし、TextInputの `HintText` プロパティを自分で「タイトルを入力」などに変更している場合は、その変更後のテキストと比較するように修正してください。
-          * 例: `TextInput_Title.Text = "タイトルを入力"`
-
-4.  **`Notify("メッセージ", NotificationType.種類)`:**
-
-      * 画面の上部に一時的に通知メッセージを表示します。
-      * `NotificationType.Error`: 赤色のエラーメッセージ。
-      * `NotificationType.Warning`: 黄色の警告メッセージ。
-      * `NotificationType.Success`: 緑色の成功メッセージ。
-      * `NotificationType.Information`: 青色の情報メッセージ。
-
-5.  **`Patch(MyDataList, Defaults(MyDataList), { ... })`:**
-
-      * `Patch` 関数は、データソース（`MyDataList`）に対してデータを変更（追加または更新）します。
-      * `Defaults(MyDataList)`: これを指定することで、`MyDataList` に**新しい行（アイテム）を追加する**ことを指示します。
-      * `{ Title: TextInput_Title.Text, ... }`: 波括弧 `{}` の中に、リストの列名と、そこに入力したいコントロールの値をペアで記述します。
-          * `Title`: SharePointリストの「タイトル」列です。
-          * `AccessCount`: SharePointリストの「アクセス数」列です。
-          * `Value(TextInput_AccessCount.Text)`: `TextInput` から取得される値は常にテキストなので、数値列に格納する場合は `Value()` 関数を使って**数値に変換する**必要があります。変換できない場合はエラーになるので注意してください。
-          * `Notes`: SharePointリストの「備考」列です。
-
-6.  **`Reset(TextInput_Title)`:**
-
-      * `Reset()` 関数は、指定されたコントロールをその初期状態（`Default` プロパティの値）に戻します。これにより、データ保存後にTextInputの入力内容をクリアできます。
-
-この設定で、ユーザーが必須項目を適切に入力しない限りデータを保存せず、エラーメッセージを表示する堅牢なアプリを作成できます。
-
-
-
-
-おー、それは良かったです！お役に立てて嬉しいです。
-
-最後にメールアドレスの入力チェックですね。特定のドメイン以外を受け付けないようにしつつ、入力がない場合と形式が違う場合でメッセージを分けたいとのこと、承知いたしました。
-
-これは、**`If` 関数**と\*\*`IsBlank` 関数**に加えて、メールアドレスの形式をチェックするための**パターン照合関数\*\*（`IsMatch` や正規表現）を組み合わせることで実現できます。
-
------
-
-## メールアドレス形式のチェックと入力なしの区別
-
-メールアドレスの形式チェックには、`IsMatch` 関数を使うのが最も強力で正確です。`IsMatch` は、入力されたテキストが特定のパターン（正規表現というルール）に合っているかをチェックできます。
-
-### 前提
-
-  * メールアドレス入力用の `TextInput` コントロールがあること。（例: `TextInput_Email`）
-  * 受け付けたいドメイン（例: `@example.com` や `@yourcompany.co.jp` など）が決まっていること。
-
-### 例文: `Button_Submit` の `OnSelect` プロパティ
-
-以下のコードを、あなたの `Button_Submit` コントロールの `OnSelect` プロパティに組み込んでください。
-
-```powerapps
-// (1) 入力値のバリデーション（検証）
-
-// TextInput_Title のバリデーション
-If(
-    IsBlank(TextInput_Title.Text) || TextInput_Title.Text = "Text input",
-    Notify("タイトルを入力してください。", NotificationType.Error),
-    
-    // TextInput_AccessCount のバリデーション
-    IsBlank(TextInput_AccessCount.Text) || TextInput_AccessCount.Text = "Text input",
-    Notify("アクセス数を入力してください。", NotificationType.Error),
-    
-    // ドロップダウンのバリデーション
-    IsBlank(
-        LookUp(
-            Table(
-                { DisplayText: "選択してください", Value: Blank() },
-                { DisplayText: "公開", Value: 1 },
-                { DisplayText: "非公開", Value: 2 },
-                { DisplayText: "一部公開", Value: 3 }
-            ),
-            DisplayText = Dropdown_Privacy.Selected
-        ).Value
-    ), 
-    Notify("公開設定を選択してください。", NotificationType.Error),
-
-    // --- ここからメールアドレスのバリデーション ---
-    // TextInput_Email が空白かどうかをチェック
-    IsBlank(TextInput_Email.Text),
-    Notify("メールアドレスを入力してください。", NotificationType.Error), // 空白の場合のメッセージ
-    
-    // TextInput_Email が特定のドメイン形式に合致するかどうかをチェック
-    // '@example.com' と '@yourcompany.co.jp' の両方を許可する場合の例
-    !IsMatch(
-        TextInput_Email.Text,
-        // 正規表現: アルファベット、数字、記号（. % + - _）の後に @ が来て、
-        // その後に 'example.com' または 'yourcompany.co.jp' で終わる
-        // i は大文字小文字を区別しないことを意味します
-        "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:example.com|yourcompany.co.jp)$",
-        MatchOptions.IgnoreCase // ドメイン名の大文字・小文字を区別しない
-    ),
-    Notify("有効なメールアドレス（@example.com または @yourcompany.co.jp ドメイン）を入力してください。", NotificationType.Error), // 形式が違う場合のメッセージ
-    // --- メールアドレスのバリデーションここまで ---
-    
-    // (2) バリデーションが全てOKだった場合のみ、SharePointリストにデータを格納
-    Patch(
-        MyDataList,
-        Defaults(MyDataList),
-        {
-            Title: TextInput_Title.Text,
-            AccessCount: Value(TextInput_AccessCount.Text),
-            Notes: TextInput_Notes.Text,
-            PrivacySetting: LookUp(
-                Table(
-                    { DisplayText: "選択してください", Value: Blank() },
-                    { DisplayText: "公開", Value: 1 },
-                    { DisplayText: "非公開", Value: 2 },
-                    { DisplayText: "一部公開", Value: 3 }
-                ),
-                DisplayText = Dropdown_Privacy.Selected
-            ).Value,
-            EmailAddress: TextInput_Email.Text // SharePointリストにメールアドレス列を追加していると仮定
-        }
-    );
-    
-    // データ格納後の処理
-    Notify("データが正常に保存されました。", NotificationType.Success);
-    Reset(TextInput_Title);
-    Reset(TextInput_AccessCount);
-    Reset(TextInput_Notes);
-    Reset(Dropdown_Privacy);
-    Reset(TextInput_Email); // メールアドレスもリセット
-    // Navigate(ScreenSuccess, ScreenTransition.Fade);
-)
-```
-
------
-
-### コードの解説
-
-1.  **`IsBlank(TextInput_Email.Text)`**
-
-      * これは、メールアドレスの入力欄(`TextInput_Email`)が**完全に空っぽ**であるかをチェックします。
-      * `true` の場合、「メールアドレスを入力してください。」というエラーメッセージを表示します。
-
-2.  **`!IsMatch(TextInput_Email.Text, "...", MatchOptions.IgnoreCase)`**
-
-      * `IsMatch()` 関数は、最初の引数（`TextInput_Email.Text`）が、2番目の引数で指定された**正規表現パターン**に合致するかどうかをチェックします。
-      * `!` (感嘆符) は「ではない」という意味で、パターンに**合致しない場合**に `true` になります。つまり、形式が正しくない場合にエラーを出します。
-      * **正規表現パターン (`"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}\~-]+@(?:example.com|yourcompany.co.jp)$"\`)**：
-          * `^`: 文字列の始まり
-          * `[a-zA-Z0-9.!#$%&'*+/=?^_`{|}\~-]+` :  `@\` の前の部分（ユーザー名など）で使える文字（アルファベット、数字、特定の記号）を1文字以上
-          * `@`: アットマーク
-          * `(?:example.com|yourcompany.co.jp)`: `example.com` または `yourcompany.co.jp` のいずれか
-              * `|` は「または」を意味します。複数のドメインを許可したい場合は、`domain1|domain2|domain3` のように `|` で区切って列挙します。
-          * `$`: 文字列の終わり
-          * このパターンは、「`@`の前に何か文字があり、`@`の後に指定したドメインが来て、そこで終わる」という形式に厳密に合致するかをチェックします。
-      * `MatchOptions.IgnoreCase`: ドメイン名の大文字・小文字を区別せずに照合します。（例: `Example.com` でも `example.com` と同じとみなす）
-      * このチェックは、`IsBlank` のチェックが `false`（つまり何か入力されている）だった場合にのみ実行されます。
-
-3.  **`Notify()` メッセージの使い分け:**
-
-      * `IsBlank` の条件で「メールアドレスを入力してください。」
-      * `!IsMatch` の条件で「有効なメールアドレス（...ドメイン）を入力してください。」
-      * このように条件を分けることで、ユーザーに具体的なエラー内容を伝えられます。
-
-### SharePoint/Listsへの格納
-
-  * `EmailAddress: TextInput_Email.Text`
-      * SharePoint/Lists に、メールアドレスを保存するための「**EmailAddress**」のような列（単一行テキスト型が適切です）を作成しておけば、そこに値を格納できます。
-
-この方法で、メールアドレスの入力チェックと、指定ドメインの固定化、そしてメッセージの区別が実現できます。試してみてください！
-
-
-# Viva Learning 独自コンテンツ（SharePoint ソース）における権限要件
-
-以下の表に、主な利用者／更新者が必要とする SharePoint および M365 管理センター上の権限をまとめました。
-
-| 対象者／役割                             | SharePoint ライブラリ権限         | M365 管理センター権限            | 備考                                                    |
-|------------------------------------------|----------------------------------|----------------------------------|---------------------------------------------------------|
-| Learning Service（サービス プリンシパル）| 読み取り（Read）                 | なし                             | コンテンツ同期用。サイトの「閲覧者」以上を付与           |
-| グローバル管理者／Viva Learning 管理者   | なし                             | Viva Learning 管理アクセス      | コンテンツソースの有効化・登録／ソース設定の変更を実施 |
-| サイト所有者（Site Owner）               | フル コントロール（Full Control）| なし                             | ライブラリ設定、メタデータ列定義、アクセス管理を実施   |
-| コンテンツ管理者／更新者                  | 編集（Contribute）               | なし                             | ファイルのアップロード・編集、メタデータ更新が可能     |
-| 一般利用者／視聴者                        | 閲覧（Read）                     | なし                             | Viva Learning 上でコンテンツ閲覧が可能                 |
-
----
-
-各権限を適切に付与することで、サービス側の同期処理およびユーザーのコンテンツ利用／更新が円滑に行えるようになります。もしカスタム ロールやより細かいアクセス制御が必要な場合は、SharePoint の IAM で追加設定を検討してください。
-
------
-
-## Power Automate を使って SharePoint リストにフォーム内容を登録する方法
-
-ユーザーに SharePoint リストの編集権限を与えずに、フォームから入力された内容をリストに登録したいのですね。その場合、Power Automate を間に挟む方法は非常に有効です。Power Automate の「実行ユーザーの接続を使用」またはサービスアカウントの接続を使用することで、ユーザーの権限に関わらずリストへの登録が可能になります。
-
-具体的な作成手順は以下の通りです。
-
-### 1\. Power Apps から Power Automate を呼び出す
-
-Power Apps でフォームの送信ボタンが押された際に、Power Automate フローを呼び出す設定を行います。
-
-  * **Power Apps での操作:**
-    1.  フォームの**送信ボタン**を選択します。
-    2.  `OnSelect` プロパティに、以下のようなコードを記述します。
-        ```powerapps
-        '自分のフロー名'.Run(TextInput1.Text, TextInput2.Text, DatePicker1.SelectedDate);
-        ```
-          * `'自分のフロー名'` は作成する Power Automate フローの名前に置き換えてください。
-          * `TextInput1.Text`, `TextInput2.Text`, `DatePicker1.SelectedDate` などは、フォームで入力されたデータを Power Automate に渡すための引数です。ご自身のフォームのコントロール名に合わせて適宜変更してください。
-    3.  必要に応じて、フローの実行が成功したかどうかのメッセージ表示や、フォームのリセットを行うロジックを追加します。
-
-### 2\. Power Automate フローの作成
-
-次に、Power Apps から渡されたデータを受け取り、SharePoint リストに登録する Power Automate フローを作成します。
-
-  * **トリガーの選択:**
-    1.  Power Automate にアクセスし、「**新しいフロー**」から「**インスタント クラウド フロー**」を選択します。
-    2.  フロー名を入力し、「**PowerApps (V2)**」をトリガーとして選択して「作成」をクリックします。
-  * **PowerApps (V2) トリガーの設定:**
-    1.  PowerApps (V2) トリガーに、Power Apps から受け取るデータを定義します。
-    2.  「**入力の追加**」をクリックし、必要な入力（テキスト、数値、日付など）を追加します。この入力名が、Power Apps でフローを呼び出す際の引数名と対応します。
-          * 例: 「テキスト」タイプで「タイトル」、「テキスト」タイプで「内容」、「日付」タイプで「登録日」など。
-  * **SharePoint アイテムの作成アクションの追加:**
-    1.  新しいステップを追加し、「**SharePoint**」コネクタから「**アイテムの作成**」アクションを検索して選択します。
-    2.  以下の項目を設定します。
-          * **サイトのアドレス:** データを登録したい SharePoint サイトの URL を選択または入力します。
-          * **リスト名:** データを登録したい SharePoint リストの名前を選択します。
-          * **各列に動的なコンテンツをマッピング:** SharePoint リストの各列に対して、PowerApps (V2) トリガーで定義した入力（Power Apps から渡されたデータ）をマッピングします。例えば、SharePoint リストの「タイトル」列には Power Apps から渡された「タイトル」の入力を設定します。
-
-### 3\. Power Automate フローの実行ユーザーの設定
-
-ここが最も重要なポイントです。ユーザーにリストの編集権限がなくても登録できるようにするには、Power Automate フローの**実行ユーザーの接続**を設定します。
-
-  * **接続の設定:**
-
-    1.  Power Automate の「**アイテムの作成**」アクションの右上にある「**…**」（その他のコマンド）をクリックし、「**マイ コネクション**」を選択します。
-    2.  通常は「**この接続を使用**」（フローを作成しているユーザーの接続）が選択されていますが、ここに**SharePoint リストへの編集権限を持つアカウント**（サービスアカウントや管理者アカウントなど）の接続を設定します。
-    3.  「**新しい接続を追加**」を選択し、適切なアカウント情報で SharePoint 接続を作成します。
-    4.  作成した新しい接続を選択し、「保存」します。
-
-    **注意点:**
-
-      * この接続は、フローが実行されるたびに使用されます。そのため、ここで設定するアカウントには、対象の SharePoint リストに対する**編集権限**が必要です。
-      * サービスアカウントを利用することで、特定個人のアカウントに依存せず、セキュリティと管理の面でメリットがあります。
-
-### 4\. フローの保存とテスト
-
-  * フローを保存します。
-  * Power Apps から実際にフォームを送信して、データが SharePoint リストに正しく登録されるかテストします。
-
-### まとめ
-
-この手順で Power Apps と Power Automate を連携させることで、ユーザーに SharePoint リストへの直接的な編集権限を与えることなく、安全かつ確実にフォームからのデータ登録を実現できます。
-
-何か詰まった点や、さらに詳細な説明が必要な場合は、お気軽にご質問ください。
-
-
+JSON
 
 {
   "query": "Service=Microsoft365ComplianceAudit&Operations=FileAccessed",
@@ -509,10 +100,402 @@ Power Apps でフォームの送信ボタンが押された際に、Power Automa
   "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
   "limit": 50000
 }
+startTime と endTime は、前日分のログを取得する Logic Apps の実行日時に応じて動的に生成します。
 
-# まず、対象のSharePointサイトに接続する
-# 例: サイトのURLが https://yourtenant.sharepoint.com/sites/YourSite の場合
-Connect-PnPOnline -Url "https://yourtenant.sharepoint.com/sites/YourSite" -Interactive
+limit は一度に取得する最大件数を指定します。
 
-# 接続後、サイト内のすべてのリストを取得して表示名を確認
-Get-PnPList | Select Title, Id, Hidden, @{Name="Url"; Expression={$_.Context.Url + $_.DefaultViewUrl}}
+Authentication: Managed Identity
+
+Audience: https://graph.microsoft.com
+
+ページネーション処理:
+
+HTTP アクションの後に Until (〜まで繰り返す) コントロールを配置します。
+
+Until ループの条件は、API応答の body('HTTP_アクション名')['@odata.nextLink'] が空ではない間、と設定します。
+
+ループ内で HTTP アクションを繰り返し呼び出し、nextLink のURLを使用します。
+
+取得した各ページのログデータを変数に追記し、全てのログを結合します。
+
+エラー処理:
+
+HTTP アクションの応答ステータスコードを確認し、エラー (例: 4xx, 5xx) の場合は後続の処理をスキップし、エラー通知フローに分岐させます。
+
+2.2.4. データ加工（CSV変換）
+アクション: Data Operations - Parse JSON (取得したログデータをJSONオブジェクトに変換)
+
+アクション: Data Operations - Create CSV table
+
+Create CSV table アクションは、JSON配列を入力として受け取り、CSV形式の文字列を生成します。
+
+ネストされたJSON構造や複雑な変換が必要な場合は、Azure Function を利用することを検討します。
+
+Azure Function (Python/C#など) でJSONデータを詳細にパースし、CSV形式に整形するロジックを実装します。
+
+Logic Apps から Azure Functions コネクタを介してこのFunctionを呼び出し、JSONデータを渡し、CSVデータを受け取ります。
+
+2.2.5. Azure Blob Storage への格納アクション
+アクション: Azure Blob Storage - Create blob (V2)
+
+設定:
+
+Storage account name: (対象のストレージアカウント名)
+
+Folder path: (コンテナー名)/[サービス名]/[年]/[月]/[日]
+
+例: purview-audit-logs/@{formatDateTime(utcNow(), 'yyyy')}/@{formatDateTime(utcNow(), 'MM')}/@{formatDateTime(utcNow(), 'dd')}
+
+Blob name: [サービス名]_[YYYYMMDD]_[HHMMSS].[拡張子]
+
+例: purview_@{formatDateTime(utcNow(), 'yyyyMMdd_HHmmss')}.csv
+
+Blob content: (CSV変換後のデータ)
+
+Blob type: Block
+
+Access tier: Hot
+
+2.2.6. 通知（完了/エラー）
+「スコープ」コントロールの配置:
+
+監査ログ取得からBlob Storageへの格納までの一連のアクションを「スコープ」コントロールで囲みます。
+
+スコープ名: Log_Collection_and_Storage_Scope など、分かりやすい名前にします。
+
+成功時の完了通知:
+
+スコープの後に「条件 (Condition)」コントロールを追加します。
+
+条件式: @{equals(outputs('Log_Collection_and_Storage_Scope').status, 'Succeeded')}
+
+「はい」の場合の処理:
+
+アクション: Office 365 Outlook - Send an email (V2) または SendGrid - Send Email
+
+To: (所定のメーリングリストのアドレス)
+
+Subject: [完了] Logic App 監査ログ取得完了 - @{workflow().name}
+
+Body: 処理が正常に完了した旨、Logic App の実行ID、完了日時、および格納されたログの概要（例: 格納されたファイル数、合計サイズなど、可能な範囲で）を含めます。
+
+失敗時のエラー通知:
+
+スコープの後に別の「条件 (Condition)」コントロールを追加するか、または上記の「条件」コントロールの「いいえ」のパスでさらに条件分岐させます。
+
+条件式: @{equals(outputs('Log_Collection_and_Storage_Scope').status, 'Failed')}
+
+「はい」の場合の処理:
+
+アクション: Office 365 Outlook - Send an email (V2) または SendGrid - Send Email
+
+To: (所定のメーリングリストのアドレス)
+
+Subject: [緊急] Logic App 監査ログ取得エラー発生 - @{workflow().name}
+
+Body: 発生したエラーの種類、Logic App の実行ID、エラー発生日時、関連するログ取得元、およびエラーの詳細（@{json(result('Log_Collection_and_Storage_Scope'))} など）を含めます。
+
+2.3. Azure Blob Storage
+監査ログの格納とライフサイクル管理を行います。
+
+2.3.1. ストレージアカウント
+種類: General-purpose v2 (GPv2)
+
+冗長性: Locally-redundant storage (LRS) または Zone-redundant storage (ZRS) (可用性要件に応じて選択)
+
+アクセス層: Hot (初期設定)
+
+2.3.2. コンテナー
+命名規則: サービスごとに分離し、小文字で統一。
+
+purview-audit-logs
+
+intune-audit-logs
+
+2.3.3. ログの命名ルール (再掲)
+形式: [サービス名]/[年]/[月]/[日]/[サービス名]_[YYYYMMDD]_[HHMMSS].[拡張子]
+
+例:
+
+purview-audit-logs/2025/07/28/purview_20250728_200000.csv
+
+intune-audit-logs/2025/07/28/intune_20250728_200000.csv
+
+3. セキュリティ考慮事項
+最小特権の原則: Logic Apps のマネージドIDに付与するロールは、必要な最小限の権限に制限します。
+
+ネットワークセキュリティ:
+
+ストレージアカウントへのアクセスを、Logic Apps がデプロイされているVNetからのアクセスに制限する (プライベートエンドポイントまたはサービスエンドポイント)。
+
+Logic Apps のアウトバウンドIPアドレスを固定し、必要に応じてファイアウォールルールを設定。
+
+シークレット管理: APIキーや接続文字列などのシークレットは、Logic Apps のコードに直接ハードコードせず、Azure Key Vault に格納し、Logic Apps から参照するようにします。
+
+4. 監視とアラート
+Azure Monitor Logs (Log Analytics Workspace):
+
+Logic Apps の診断設定を有効にし、すべてのログをLog Analytics Workspaceに送信します。
+
+Kusto Query Language (KQL) を使用して、以下のクエリで監視します。
+
+Logic App 実行成功/失敗:
+
+コード スニペット
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.LOGIC"
+| where Category == "WorkflowRuntime"
+| where resource_workflowName_s == "YourLogicAppName" // Logic App 名を指定
+| summarize RunCount = count() by status_s
+特定のアクションの失敗:
+
+コード スニペット
+
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.LOGIC"
+| where Category == "WorkflowRuntime"
+| where resource_workflowName_s == "YourLogicAppName"
+| where status_s == "Failed"
+| mv-expand properties_action_s
+| where properties_action_s.status == "Failed"
+| project TimeGenerated, resource_workflowName_s, properties_action_s.actionName, properties_action_s.error
+Azure Monitor アラート:
+
+アラートルール: Log Analytics Workspace 上で、上記のKQLクエリを基にアラートルールを作成します。
+
+条件: 例: 過去5分間に Logic App の実行失敗が1回以上発生した場合。
+
+アクショングループ: メーリングリストへのメール通知を設定したアクショングループを割り当てます。
+
+5. コスト最適化
+ストレージコスト:
+
+3年間の保存期間中、アクセス頻度が低下する過去のログに対しては、ライフサイクル管理ポリシーで Hot → Cool → Archive 層への段階的な移行を検討します。これにより、ストレージコストを大幅に削減できます。
+
+例:
+
+最終変更後 30日経過: Hot から Cool へ移行
+
+最終変更後 90日経過: Cool から Archive へ移行
+
+最終変更後 1095日経過: 削除
+
+Logic Apps コスト:
+
+実行回数とアクション数に基づいて課金されます。不要な実行や冗長なアクションがないか定期的に見直します。
+
+6. デプロイと運用
+デプロイ:
+
+Infrastructure as Code (IaC): Azure Resource Manager (ARM) テンプレート、Bicep、または Terraform を使用して、Logic Apps、ストレージアカウント、ライフサイクル管理ポリシー、監視設定などをコードとしてデプロイすることを推奨します。これにより、再現性と一貫性が確保されます。
+
+運用:
+
+定期的な監視: Azure Monitor を活用し、Logic Apps の実行状況、エラー、ストレージの使用状況などを定期的に監視します。
+
+ログの確認: 必要に応じて、Azure Portal の Blob Storage または Azure Storage Explorer を使用して、格納されたログの確認を行います。
+
+ライフサイクルポリシーの確認: ポリシーが意図通りに動作しているか、定期的に確認します。
+
+API変更への対応: Microsoft Graph API や Purview API の変更があった場合、Logic Apps のワークフローを適宜更新する必要があります。
+
+
+【詳細設計】
+1. 全体アーキテクチャ図
+コード スニペット
+
+graph TD
+    subgraph Log Sources
+        A[Microsoft Purview Audit Logs] -->|Microsoft Graph Security API (with Pagination)| B(Logic App)
+        C[Intune Audit Logs] -->|Microsoft Graph API (with Pagination)| B
+    end
+
+    subgraph Azure
+        B --Trigger: Daily--> D(Logic App)
+        D --Authenticate with Managed Identity--> E(Azure Blob Storage)
+        E --Lifecycle Management Policy--> F(Deletion after 3 years)
+        D --On Failure / On Success--> G(Office 365 Outlook / SendGrid)
+    end
+
+    subgraph Monitoring
+        D --Logs--> H(Azure Monitor Logs)
+        H --Alert Rule--> G
+    end
+
+    G[Mailing List]
+2. コンポーネント詳細
+2.1. Azure リソースグループ
+リソースグループ名: rg-audit-log-prod-central
+
+用途: 本システムを構成する全てのAzureリソース（Logic Apps、ストレージアカウント、Key Vaultなど）を配置し、一元管理、アクセス制御、およびコスト追跡を行います。
+
+2.2. Logic Apps
+監査ログの取得、加工、格納、および通知を自動化するワークフローを設計します。
+
+2.2.1. トリガー
+種類: Recurrence (繰り返し)
+
+設定:
+
+Frequency: Day
+
+Interval: 1
+
+At these hours: 20 (日本時間午後8時)
+
+At these minutes: 0
+
+Time zone: (UTC+09:00) Osaka, Sapporo, Tokyo
+
+2.2.2. 認証
+方式: マネージドID (Managed Identity)
+
+設定: Logic App リソースの「ID」ブレードで、システム割り当て済みマネージドIDを有効にします。
+
+必要なRBACロール割り当て:
+
+対象: Logic App のマネージドID
+
+スコープ: rg-audit-log-prod-central リソースグループ
+
+ロール:
+
+Storage Blob データ共同作成者: Azure Blob Storage への読み書き権限。
+
+アプリケーション所有者（または同等の権限）：Microsoft Graph APIへのアクセスに必要なAzure ADアプリケーション登録に付与。
+
+2.2.3. 監査ログ取得とページネーションのワークフロー
+変数初期化:
+
+varLogData (Array型): 取得したログデータを一時的に格納する配列。
+
+varNextLink (String型): ページネーションのための nextLink URLを格納。
+
+ログ取得 (Purview) - Until ループ:
+
+コントロール: Until (〜まで繰り返す)
+
+条件: varNextLink が空ではない (@not(equals(variables('varNextLink'), '')))
+
+アクション（ループ内）:
+
+HTTPアクション: POST メソッドで Microsoft Graph Security API (/security/auditLogs/query) を呼び出します。
+
+リクエストボディ:
+
+JSON
+
+{
+  "query": "Service=Microsoft365ComplianceAudit&Operations=FileAccessed",
+  "startTime": "@{formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-ddT00:00:00Z')}",
+  "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
+  "limit": 50000
+}
+初回は固定の開始・終了日時、2回目以降はnextLinkを使用します。
+
+応答処理:
+
+Parse JSON アクションで応答ボディをパース。
+
+nextLink が存在する場合、varNextLink 変数を更新します。
+
+Compose アクションでログデータを抽出・整形し、varLogData 配列変数に追加します。
+
+Intune ログも同様にページネーションで取得し、varLogData に結合します。
+
+2.2.4. データ加工 (CSV変換)
+CSVヘッダー定義:
+
+ログデータから抽出するフィールドを決定し、CSVのヘッダーを定義します。
+
+例: Timestamp,UserId,Operation,ResultStatus
+
+JSONからCSVへの変換:
+
+Data Operations - Create CSV tableアクション:
+
+From: varLogData
+
+Headers: Custom を選択し、定義したヘッダーを配列で入力します。
+
+詳細: シンプルなJSON構造の場合は有効です。
+
+Azure Function (推奨):
+
+言語: Python/C#
+
+ロジック: varLogData をJSON配列として受け取り、CSVライブラリを使用してCSV文字列に変換します。ネストされたJSONをフラット化し、ヘッダーに合うようにフィールドをマッピングするロジックを実装します。
+
+2.2.5. Azure Blob Storage への格納
+アクション: Azure Blob Storage - Create blob (V2)
+
+設定:
+
+Storage account name: (対象のストレージアカウント名)
+
+Folder path: purview-audit-logs/@{formatDateTime(utcNow(), 'yyyy')}/@{formatDateTime(utcNow(), 'MM')}/@{formatDateTime(utcNow(), 'dd')}
+
+Blob name: purview_@{formatDateTime(utcNow(), 'yyyyMMdd_HHmmss')}.csv
+
+Blob content: CSV変換後のデータ
+
+Blob type: Block
+
+2.3. Azure Blob Storage
+ストレージアカウント: General-purpose v2 (GPv2)
+
+冗長性: LRS
+
+アクセス層: Hot
+
+コンテナー:
+
+purview-audit-logs
+
+intune-audit-logs
+
+ライフサイクル管理ポリシー:
+
+ルール:
+
+ルール名: DeleteBlobsAfter1095Days
+
+フィルター: purview-audit-logs コンテナー内の ブロック BLOB
+
+アクション: 最終変更から 1095 日後に BLOB を削除する
+
+3. セキュリティ考慮事項
+Key Vault:
+
+rg-audit-log-prod-central リソースグループ内にAzure Key Vaultをデプロイします。
+
+APIキーや接続文字列などのシークレットはKey Vaultに格納し、Logic Apps から参照するように構成します。
+
+Logic Apps のマネージドIDに、Key Vaultの「シークレットの取得」権限を付与します。
+
+ネットワーク:
+
+ストレージアカウントで「選択された仮想ネットワークとIPアドレスから有効」なアクセスを許可する設定を行い、Logic AppsのアウトバウンドIPアドレスを許可リストに追加します。
+
+4. 監視とアラート
+Logic Apps 診断設定:
+
+Logic App の診断設定を有効化し、WorkflowRuntime カテゴリのログを Log Analytics Workspace に送信するように構成します。
+
+Azure Monitor アラート:
+
+アラートルール: Logic App の実行ログをクエリし、status_s == "Failed" の場合にアラートを発生させます。
+
+アクショングループ: 担当者やメーリングリスト宛てのメール通知をアクショングループとして定義し、アラートルールに紐づけます。
+
+5. 運用と保守
+デプロイメント:
+
+ARMテンプレートまたはBicepファイルを作成し、リソースグループ、Logic Apps、ストレージアカウント、およびRBACロール割り当てをコードとしてデプロイします。
+
+これにより、開発環境 (rg-audit-log-dev-central) と本番環境を簡単に同期・管理できます。
+
+定期的なレビュー:
+
+ログ量やAPI仕様の変更に備え、年に一度など定期的に本設計を見直します。
