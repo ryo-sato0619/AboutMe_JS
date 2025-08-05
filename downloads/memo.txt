@@ -669,3 +669,13 @@ SharePoint連携ロジック: SharePointコネクタを使って、アイテム�
   "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
   "limit": 50000 
 }
+
+# 証明書を作成する
+$cert = New-SelfSignedCertificate -Subject "CN=LogicApp-GraphAPI-Test-Cert" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature
+
+# 証明書を .pfx ファイルとしてエクスポートする
+$pfxPassword = ConvertTo-SecureString -String "YOUR_SAFE_PASSWORD_HERE" -Force -AsPlainText
+Export-PfxCertificate -Cert $cert -FilePath C:\temp\logic-app-cert.pfx -Password $pfxPassword
+
+# 証明書の公開鍵を .cer ファイルとしてエクスポートする
+Export-Certificate -Cert $cert -FilePath C:\temp\logic-app-cert.cer
