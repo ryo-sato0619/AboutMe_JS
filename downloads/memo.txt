@@ -670,12 +670,16 @@ SharePoint連携ロジック: SharePointコネクタを使って、アイテム�
   "limit": 50000 
 }
 
-# 証明書を作成する
-$cert = New-SelfSignedCertificate -Subject "CN=LogicApp-GraphAPI-Test-Cert" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature
+# 証明書を作成し、Current Userの個人ストアに保存します
+$cert = New-SelfSignedCertificate -Subject "CN=LogicApp-GraphAPI-Test-Cert" -KeyExportPolicy Exportable -CertStoreLocation "Cert:\CurrentUser\My"
 
-# 証明書を .pfx ファイルとしてエクスポートする
+# 証明書のパスワードを設定します（安全なパスワードに変更してください）
 $pfxPassword = ConvertTo-SecureString -String "YOUR_SAFE_PASSWORD_HERE" -Force -AsPlainText
+
+# 秘密鍵を含む証明書（.pfxファイル）をエクスポートします
+# このファイルはAzure Key Vaultにアップロードします
 Export-PfxCertificate -Cert $cert -FilePath C:\temp\logic-app-cert.pfx -Password $pfxPassword
 
-# 証明書の公開鍵を .cer ファイルとしてエクスポートする
+# 公開鍵のみの証明書（.cerファイル）をエクスポートします
+# このファイルはMicrosoft Entra IDにアップロードします
 Export-Certificate -Cert $cert -FilePath C:\temp\logic-app-cert.cer
