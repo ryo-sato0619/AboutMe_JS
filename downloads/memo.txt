@@ -661,3 +661,11 @@ Apply to each: 解析したデータから、メッセージごとにループ�
 SharePoint連携ロジック: SharePointコネクタを使って、アイテムの存在確認、新規作成、または更新を行います。
 
 最終実行日時の更新: lastRunDate変数を utcNow() で更新します。
+
+
+{
+  "query": "Service=Microsoft365ComplianceAudit",
+  "startTime": "@{formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-ddT00:00:00Z')}",
+  "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}",
+  "limit": 50000 
+}
