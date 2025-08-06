@@ -683,3 +683,39 @@ Export-PfxCertificate -Cert $cert -FilePath C:\temp\logic-app-cert.pfx -Password
 # 公開鍵のみの証明書（.cerファイル）をエクスポートします
 # このファイルはMicrosoft Entra IDにアップロードします
 Export-Certificate -Cert $cert -FilePath C:\temp\logic-app-cert.cer
+
+
+3. 監査ログ取得のためのHTTPアクションの追加
+Graph APIを呼び出して監査ログを取得するアクションを追加します。
+
+HTTP 要求の受信時トリガーの下にある「+ 新しいステップ」をクリックします。
+
+検索ボックスに「HTTP」と入力し、組み込みの「HTTP」アクションを選択します。
+
+以下の設定を行います。
+
+Method: POST
+
+URI: https://graph.microsoft.com/v1.0/security/auditLogs/query
+
+ヘッダー:
+
+キー: Content-Type
+
+値: application/json
+
+本文:
+
+JSON
+
+{
+  "startTime": "@{formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-ddT00:00:00Z')}",
+  "endTime": "@{formatDateTime(utcNow(), 'yyyy-MM-ddT00:00:00Z')}"
+}
+💡 この例では過去24時間のログを取得します。取得したい期間に合わせてstartTimeとendTimeを調整してください。
+
+認証: 以下の設定を展開して行います。
+
+認証の種類: マネージド ID
+
+オーディエンス: https://graph.microsoft.com
