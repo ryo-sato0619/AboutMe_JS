@@ -733,3 +733,186 @@ JSON
 }
 
 json(concat('{ "query": "Service=Microsoft365ComplianceAudit", "startTime": "', variables('varStartTime'), '", "endTime": "', variables('varEndTime'), '" }'))
+
+🧭 全体の流れ
+
+1. Logic App の作成（手動トリガー）
+2. マネージド ID の有効化と API 権限付与
+3. Graph API を呼び出す HTTP アクションの構成
+4. Purview 監査ログの取得とレスポンス確認
+
+
+---
+
+🛠️ ステップ 1：Logic App の作成
+
+1. Azure ポータルで「Logic Apps」を検索し、新規作成。
+2. 名前、リソースグループ、リージョンを指定。
+3. 「消費型」または「標準型」どちらでも可（今回は消費型で説明）。
+4. 作成後、Designer を開き、「手動トリガー」を選択（例：`When an HTTP request is received`）。
+
+
+---
+
+🔐 ステップ 2：マネージド ID の有効化と API 権限付与
+
+Logic App にマネージド ID を付与
+
+1. Logic App の「ID」ブレードを開く。
+2. 「システム割り当てマネージド ID」を オン にして保存。
+
+
+Microsoft Graph API へのアクセス許可
+
+Purview の監査ログは Graph API の `auditLogs` に含まれます。
+
+1. マネージド ID に以下の API 権限を付与（Azure CLI または PowerShell 推奨）：
+
+
+# マネージド ID のオブジェクト ID を取得
+$logicAppPrincipalId = (Get-AzLogicApp -ResourceGroupName "<RG>" -Name "<LogicAppName>").Identity.PrincipalId
+
+# Graph API のアプリロール割り当て
+New-AzRoleAssignment -ObjectId $logicAppPrincipalId `
+  -RoleDefinitionName "AuditLog.Read.All" `
+  -Scope "/"
+
+
+注意：Graph API の `AuditLog.Read.All` は アプリケーション権限です。Entra ID 管理者による同意が必要です。
+
+---
+
+🌐 ステップ 3：Graph API 呼び出しの構成
+
+HTTP アクションの追加
+
+1. Designer で「新しいステップ」→「HTTP」を選択。
+2. 以下のように構成：
+
+
+項目	値	
+方法	GET	
+URI	https://graph.microsoft.com/v1.0/auditLogs/signIns（または directoryAudits）	
+認証	「マネージド ID」選択 → 対象リソース：https://graph.microsoft.com	
+
+
+オプション：フィルターや日時指定
+
+クエリパラメータで絞り込み可能：
+
+https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?$filter=activityDisplayName eq 'FileAccessed'&$top=10
+
+
+---
+
+📦 ステップ 4：レスポンスの確認と整形
+
+1. HTTP アクションの出力を「Parse JSON」アクションで整形。
+2. Schema は Graph Explorer などで取得したサンプルレスポンスから生成可能。
+3. 必要に応じて「条件分岐」や「Teams 通知」などを追加。
+
+
+---
+
+✅ テスト実行
+
+1. Designer 上部の「実行」ボタンで手動トリガー。
+2. 実行履歴で HTTP ステータスとレスポンス内容を確認。
+3. 成功すれば Purview の監査ログが取得できているはずです。
+
+
+---
+
+🔍 補足：Purview 専用ログとの違い
+
+Purview の「データガバナンス操作ログ」は Graph API ではなく、Microsoft Purview の REST API または Log Analytics 経由で取得する場合もあります。今回の `auditLogs` は Entra ID や Microsoft 365 の監査ログに該当します。
+
+
+
+https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?$filter=activityDisplayName eq 'FileAccessed'&$top=10
+
+
+完璧です、涼さん。
+「昨日の日付で監査ログを取得する方法」と「Logic App のマネージド ID に現在付与されている Graph API 権限の確認方法」について、詳細に解説します。
+
+---
+
+📅 昨日の日付で監査ログを取得する方法（Graph API）
+
+Graph API の `auditLogs` は `$filter` クエリで `createdDateTime` を指定できます。Logic Apps では **式を使って「昨日の日付」**を生成し、HTTP アクションの URI に組み込むことが可能です。
+
+🔧 手順：昨日の日付を生成してフィルターに使う
+
+① 「変数の初期化」アクションを追加
+
+項目	値	
+名前	startDate	
+型	String	
+値	@formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-dd')	
+
+
+② HTTP アクションの URI を以下のように変更
+
+https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?$filter=createdDateTime ge @{variables('startDate')}T00:00:00Z and createdDateTime lt @{formatDateTime(utcNow(), 'yyyy-MM-dd')}T00:00:00Z
+
+
+これで「昨日の 00:00:00 ～ 今日の 00:00:00」までのログが取得されます。
+
+---
+
+🔐 マネージド ID に現在付与されている Graph API 権限の確認方法
+
+Azure ポータルや CLI で確認できます。以下に両方の方法を紹介します。
+
+---
+
+🧭 方法①：Azure ポータルで確認
+
+1. Logic App の「ID」ブレードを開く。
+2. 「Azure ロール割り当て」タブで、割り当てられているロールを確認。
+3. ただし、Graph API のアプリケーション権限（OAuth スコープ）はここでは見えません。
+
+
+---
+
+🧪 方法②：Microsoft Graph API で確認（推奨）
+
+① マネージド ID のオブジェクト ID を取得
+
+Azure CLI:
+
+az logicapp show --name <LogicAppName> --resource-group <RG> --query identity.principalId
+
+
+② Graph API でアプリロール割り当てを確認
+
+Graph Explorer または HTTP アクションで以下のエンドポイントを呼び出します：
+
+GET https://graph.microsoft.com/v1.0/servicePrincipals/<ObjectId>/appRoleAssignments
+
+
+③ 結果の例
+
+[
+  {
+    "resourceDisplayName": "Microsoft Graph",
+    "appRoleId": "some-guid",
+    "principalDisplayName": "logicapp-name",
+    "id": "assignment-id",
+    "createdDateTime": "2025-08-05T00:00:00Z"
+  }
+]
+
+
+`resourceDisplayName` が “Microsoft Graph” であれば、Graph API の権限が付与されています。
+
+---
+
+🧠 補足：権限の種類と確認の注意点
+
+権限タイプ	付与方法	確認方法	
+Azure RBAC（例：Reader）	Azure ポータル	Logic App の「アクセス制御」	
+Graph API アプリ権限（例：AuditLog.Read.All）	Entra ID 管理者による同意	Graph API の appRoleAssignments	
+
+
+---
