@@ -725,3 +725,9 @@ JSON
   "startTime": "@{variables('varStartTime')}",
   "endTime": "@{variables('varEndTime')}"
 }
+
+{
+  "query": "Service=Microsoft365ComplianceAudit",
+  "startTime": "2025-08-05T00:00:00Z",
+  "endTime": "2025-08-06T00:00:00Z"
+}
