@@ -719,3 +719,9 @@ JSON
 認証の種類: マネージド ID
 
 オーディエンス: https://graph.microsoft.com
+
+{
+  "query": "Service=Microsoft365ComplianceAudit",
+  "startTime": "@{variables('varStartTime')}",
+  "endTime": "@{variables('varEndTime')}"
+}
