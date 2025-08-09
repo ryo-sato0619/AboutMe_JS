@@ -21,3 +21,30 @@ let data = workflowContext.actions.HTTP.outputs.body;
 let csv = Object.keys(data[0]).join(',') + '\n' +
           data.map(row => Object.values(row).join(',')).join('\n');
 return csv;
+
+
+let data = workflowContext.actions.HTTP.outputs.body;
+let csvRows = data.map(item => {
+  return [
+    item.details?.name,
+    item.details?.email,
+    item.status,
+    item.meta?.createdDate,
+    item.type,
+    item.id
+  ].join(',');
+});
+let header = 'Name,Email,Status,Created,Type,ID';
+return header + '\n' + csvRows.join('\n');
+
+{
+  "Name": item()?['details']?['name'],
+  "Email": item()?['details']?['email'],
+  "Status": item()?['status'],
+  "Created": item()?['meta']?['createdDate'],
+  "Type": item()?['type'],
+  "ID": item()?['id']
+}
+
+
+終了
