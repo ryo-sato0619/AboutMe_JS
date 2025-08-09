@@ -1,8 +1,8 @@
 {
-  "日時": "@split(item(), ',')?[0]",
-  "操作": "@split(item(), ',')?[1]",
-  "対象": "@join(split(split(item(), ',')?[2], '|'), ', ')",
-  "カテゴリ": "@split(item(), ',')?[3]",
-  "結果": "@split(item(), ',')?[4]",
-  "操作種別": "@split(item(), ',')?[5]"
+  "日時": "@item()?['activityDateTime']",
+  "操作": "@item()?['activityDisplayName']",
+  "対象": "@join(select(item()?['targetResources'], 'displayName'), ', ')",
+  "カテゴリ": "@item()?['category']",
+  "結果": "@item()?['result']",
+  "操作種別": "@item()?['operationType']"
 }
