@@ -6,3 +6,18 @@
   "結果": "@item()?['result']",
   "操作種別": "@item()?['operationType']"
 }
+
+{
+  "Name": item()?['name'],
+  "Email": item()?['email'],
+  "Department": item()?['department']
+}
+
+join(body('Select'), '\n')
+
+concat('Name,Email,Department\n', outputs('Join'))
+
+let data = workflowContext.actions.HTTP.outputs.body;
+let csv = Object.keys(data[0]).join(',') + '\n' +
+          data.map(row => Object.values(row).join(',')).join('\n');
+return csv;
