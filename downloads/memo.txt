@@ -120,7 +120,7 @@ $response  = Invoke-RestMethod -Method Post -Uri $signUri -Headers @{ Authorizat
 $signature = $response.value
 
 # JWT完成
-$jwt = "$jwtUnsigned." + To-Base64Url([Convert]::FromBase64String($signature))
+$jwt = -join ($jwtUnsigned, ".", To-Base64Url([Convert]::FromBase64String($signature)))
 
 # 保存
 Set-Content -Path "./jwt.txt" -Value $jwt
