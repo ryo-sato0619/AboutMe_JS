@@ -119,11 +119,11 @@ return $base64url
   $response  = Invoke-RestMethod -Method Post -Uri $signUri -Headers @{ Authorization = "Bearer $accessToken" } -Body $body -ContentType "application/json"
   $signature = $response.value
 
-  # JWT完成
-  $jwt = [string]::Join(".", @(
-      $jwtUnsigned,
-      To-Base64Url([Convert]::FromBase64String($signature))
-  ))
+# 式を事前評価して変数に格納
+$encodedSignature = To-Base64Url([Convert]::FromBase64String($signature))
+
+# JWT完成（header.payload.signature）
+$jwt = [string]::Join(".", @($jwtUnsigned, $encodedSignature))
 
 
   # 保存
