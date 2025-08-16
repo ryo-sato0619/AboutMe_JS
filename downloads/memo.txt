@@ -188,3 +188,7 @@ $responseLA = Invoke-RestMethod -Method POST -Uri $logicAppsUri -Body $payloadTo
 
 Write-Host "✅ JWT生成＆送信完了：Logic Apps応答 → $($responseLA | ConvertTo-Json -Depth 5)"
 
+
+
+$encoded = To-Base64Url([Convert]::FromBase64String($signature))
+Write-Host "Encoded: $encoded"
