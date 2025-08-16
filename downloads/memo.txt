@@ -15,3 +15,55 @@ $digest = $sha256.ComputeHash($bytes)
 $base64url = [Convert]::ToBase64String($digest).Replace('+','-').Replace('/','_').TrimEnd('=')
 
 return $base64url
+
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Digest Generator API",
+    "description": "Generates SHA-256 digest in Base64URL format",
+    "version": "1.0"
+  },
+  "host": "yourdigestapi.azurewebsites.net",
+  "basePath": "/api",
+  "schemes": ["https"],
+  "paths": {
+    "/digest": {
+      "post": {
+        "summary": "Generate digest",
+        "description": "Returns SHA-256 digest of input string",
+        "operationId": "GenerateDigest",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "input",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              },
+              "required": ["input"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful digest generation",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "digest": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
