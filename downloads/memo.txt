@@ -67,3 +67,124 @@ return $base64url
     }
   }
 }
+
+分離
+
+生成
+# 必要な変数
+$tenantId     = "<your-tenant-id>"
+$clientId     = "<your-client-id>"
+$keyVaultName = "<your-keyvault-name>"
+$keyName      = "<your-key-name>"
+$aud          = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+
+# JWTヘッダーとペイロード
+$header = @{
+    alg = "RS256"
+    typ = "JWT"
+}
+$payload = @{
+    aud = $aud
+    iss = $clientId
+    sub = $clientId
+    jti = [guid]::NewGuid().ToString()
+    nbf = [int](Get-Date).ToUniversalTime().Subtract([datetime]'1970-01-01').TotalSeconds
+    exp = $nbf + 600
+}
+
+# Base64URLエンコード関数
+function To-Base64Url($bytes) {
+    [Convert]::ToBase64String($bytes).Replace('+','-').Replace('/','_').TrimEnd('=')
+}
+
+# JSON → UTF8 → Base64URL
+$headerEncoded  = To-Base64Url([System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $header -Compress)))
+$payloadEncoded = To-Base64Url([System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $payload -Compress)))
+$jwtUnsigned    = "$headerEncoded.$payloadEncoded"
+
+# digest生成（SHA-256）
+$sha256      = [System.Security.Cryptography.SHA256]::Create()
+$digestBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($jwtUnsigned))
+
+# Key Vault署名（RS256）
+$kvUri       = "https://$keyVaultName.vault.azure.net"
+$accessToken = (Get-AzAccessToken -ResourceUrl $kvUri).Token
+$signUri     = "$kvUri/keys/$keyName/sign?api-version=7.4"
+
+$body = @{
+    alg   = "RS256"
+    value = [Convert]::ToBase64String($digestBytes)
+} | ConvertTo-Json
+
+$response  = Invoke-RestMethod -Method Post -Uri $signUri -Headers @{ Authorization = "Bearer $accessToken" } -Body $body -ContentType "application/json"
+$signature = $response.value
+
+# JWT完成
+$jwt = "$jwtUnsigned." + To-Base64Url([Convert]::FromBase64String($signature))
+
+# 保存
+Set-Content -Path "./jwt.txt" -Value $jwt
+Write-Host "✅ JWT生成完了：jwt.txt に保存しました"
+
+送信
+
+# Logic AppsのHTTPトリガーURL
+$logicAppsUri = "<your-logicapps-http-trigger-url>"
+
+# JWT読み込み
+$jwt = Get-Content -Path "./jwt.txt"
+
+# POST送信
+$body = @{ jwt = $jwt } | ConvertTo-Json
+$response = Invoke-RestMethod -Method POST -Uri $logicAppsUri -Body $body -ContentType "application/json"
+
+Write-Host "✅ JWT送信完了：Logic Apps応答 → $($response | ConvertTo-Json -Depth 5)"
+
+
+1つにまとめる
+# 必要な変数
+$tenantId       = "<your-tenant-id>"
+$clientId       = "<your-client-id>"
+$keyVaultName   = "<your-keyvault-name>"
+$keyName        = "<your-key-name>"
+$logicAppsUri   = "<your-logicapps-http-trigger-url>"
+$aud            = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+
+# JWTヘッダーとペイロード
+$header = @{ alg = "RS256"; typ = "JWT" }
+$payload = @{
+    aud = $aud
+    iss = $clientId
+    sub = $clientId
+    jti = [guid]::NewGuid().ToString()
+    nbf = [int](Get-Date).ToUniversalTime().Subtract([datetime]'1970-01-01').TotalSeconds
+    exp = $nbf + 600
+}
+
+function To-Base64Url($bytes) {
+    [Convert]::ToBase64String($bytes).Replace('+','-').Replace('/','_').TrimEnd('=')
+}
+
+$headerEncoded  = To-Base64Url([System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $header -Compress)))
+$payloadEncoded = To-Base64Url([System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $payload -Compress)))
+$jwtUnsigned    = "$headerEncoded.$payloadEncoded"
+
+$sha256      = [System.Security.Cryptography.SHA256]::Create()
+$digestBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($jwtUnsigned))
+
+$kvUri       = "https://$keyVaultName.vault.azure.net"
+$accessToken = (Get-AzAccessToken -ResourceUrl $kvUri).Token
+$signUri     = "$kvUri/keys/$keyName/sign?api-version=7.4"
+
+$body = @{ alg = "RS256"; value = [Convert]::ToBase64String($digestBytes) } | ConvertTo-Json
+$response  = Invoke-RestMethod -Method Post -Uri $signUri -Headers @{ Authorization = "Bearer $accessToken" } -Body $body -ContentType "application/json"
+$signature = $response.value
+
+$jwt = "$jwtUnsigned." + To-Base64Url([Convert]::FromBase64String($signature))
+
+# Logic Appsへ送信
+$payloadToLogicApps = @{ jwt = $jwt } | ConvertTo-Json
+$responseLA = Invoke-RestMethod -Method POST -Uri $logicAppsUri -Body $payloadToLogicApps -ContentType "application/json"
+
+Write-Host "✅ JWT生成＆送信完了：Logic Apps応答 → $($responseLA | ConvertTo-Json -Depth 5)"
+
