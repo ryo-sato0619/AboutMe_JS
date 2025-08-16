@@ -6,3 +6,12 @@
   "結果": "@item()?['result']",
   "操作種別": "@item()?['operationType']"
 }
+
+param([string]$input)
+
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
+$sha256 = New-Object System.Security.Cryptography.SHA256Managed
+$digest = $sha256.ComputeHash($bytes)
+$base64url = [Convert]::ToBase64String($digest).Replace('+','-').Replace('/','_').TrimEnd('=')
+
+return $base64url
