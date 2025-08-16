@@ -192,3 +192,6 @@ Write-Host "✅ JWT生成＆送信完了：Logic Apps応答 → $($responseLA | 
 
 $encoded = To-Base64Url([Convert]::FromBase64String($signature))
 Write-Host "Encoded: $encoded"
+
+$bytes = [Convert]::FromBase64String($signature)
+Write-Host "Byte length: $($bytes.Length)"
