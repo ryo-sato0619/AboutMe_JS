@@ -193,40 +193,8 @@ $responseLA = Invoke-RestMethod -Method POST -Uri $logicAppsUri -Body $payloadTo
 Write-Host "✅ JWT生成＆送信完了：Logic Apps応答 → $($responseLA | ConvertTo-Json -Depth 5)"
 
 
-function Convert-Base64UrlToBase64 {
-    param ([string]$base64url)
-    $base64 = $base64url.Replace('-', '+').Replace('_', '/')
-    switch ($base64.Length % 4) {
-        2 { $base64 += '==' }
-        3 { $base64 += '=' }
-        0 { }
-        default { throw "Invalid Base64URL length" }
-    }
-    return $base64
-}
 
-# トークン取得
-$accessToken = (Get-AzAccessToken -ResourceUrl "https://vault.azure.net").Token
-$tokenParts = $accessToken -split '\.'
-
-# Base64URL → Base64変換
-$payloadBase64 = Convert-Base64UrlToBase64 $tokenParts[1]
-
-# デコードしてJSON化
-$decodedPayload = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payloadBase64))
-$decodedJson = $decodedPayload | ConvertFrom-Json
-
-# 表示
-Write-Host "`n🔍 トークンの検証結果：" -ForegroundColor Cyan
-Write-Host "aud (Audience): $($decodedJson.aud)"
-Write-Host "exp (Expiration): $($decodedJson.exp) → " -NoNewline
-Write-Host ([System.DateTimeOffset]::FromUnixTimeSeconds($decodedJson.exp).ToLocalTime())
-Write-Host "iss (Issuer): $($decodedJson.iss)"
-Write-Host "appid (Application ID): $($decodedJson.appid)"
-Write-Host "sub (Subject): $($decodedJson.sub)"
-Write-Host "scp (Scope): $($decodedJson.scp)"
+Get-AzAccessToken -ResourceUrl "https://vault.azure.net"
 
 
-$accessToken = (Get-AzAccessToken -ResourceUrl "https://vault.azure.net").Token
-Write-Host "`n🔍 Raw Access Token:"
-Write-Host $accessToken
+ここまで
