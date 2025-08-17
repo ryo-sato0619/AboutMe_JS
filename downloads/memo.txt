@@ -225,3 +225,8 @@ Write-Host "iss (Issuer): $($decodedJson.iss)"
 Write-Host "appid (Application ID): $($decodedJson.appid)"
 Write-Host "sub (Subject): $($decodedJson.sub)"
 Write-Host "scp (Scope): $($decodedJson.scp)"
+
+
+$accessToken = (Get-AzAccessToken -ResourceUrl "https://vault.azure.net").Token
+Write-Host "`n🔍 Raw Access Token:"
+Write-Host $accessToken
