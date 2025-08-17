@@ -193,3 +193,31 @@ $responseLA = Invoke-RestMethod -Method POST -Uri $logicAppsUri -Body $payloadTo
 Write-Host "✅ JWT生成＆送信完了：Logic Apps応答 → $($responseLA | ConvertTo-Json -Depth 5)"
 
 
+# Azure にログイン（必要に応じて）
+Connect-AzAccount
+
+# Key Vault 用のアクセストークンを取得
+$accessTokenResponse = Get-AzAccessToken -ResourceUrl "https://vault.azure.net"
+$accessToken = $accessTokenResponse.Token
+
+# JWTのPayload部分を抽出してBase64デコード
+$tokenParts = $accessToken -split '\.'
+$payload = $tokenParts[1]
+
+# Base64のパディング補正（JWTはパディングなし）
+$padding = '=' * (4 - ($payload.Length % 4))
+$payloadPadded = $payload + $padding
+
+# デコードしてJSONに変換
+$decodedPayload = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payloadPadded))
+$decodedJson = $decodedPayload | ConvertFrom-Json
+
+# 表示：トークンの主要項目
+Write-Host "`n🔍 トークンの検証結果：" -ForegroundColor Cyan
+Write-Host "aud (Audience): $($decodedJson.aud)"
+Write-Host "exp (Expiration): $($decodedJson.exp) → " -NoNewline
+Write-Host ([System.DateTimeOffset]::FromUnixTimeSeconds($decodedJson.exp).ToLocalTime())
+Write-Host "iss (Issuer): $($decodedJson.iss)"
+Write-Host "appid (Application ID): $($decodedJson.appid)"
+Write-Host "sub (Subject): $($decodedJson.sub)"
+Write-Host "scp (Scope): $($decodedJson.scp)"
