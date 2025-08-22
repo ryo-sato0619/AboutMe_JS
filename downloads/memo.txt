@@ -267,3 +267,92 @@ Get-AzAccessToken -ResourceUrl "https://vault.azure.net"
     "operationMetadataId": "get_log_file_step"
   }
 }
+
+
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Get_Secret_From_KeyVault": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azurekeyvault']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/secrets/<KeyVault内のシークレット名>"
+        },
+        "runAfter": {}
+      },
+      "Get_Access_Token": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "https://login.microsoftonline.com/<テナントID>/oauth2/v2.0/token",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "body": "grant_type=client_credentials&client_id=<クライアントID>&client_secret=@{body('Get_Secret_From_KeyVault')?['value']}&scope=https%3A%2F%2Fmanage.office.com%2F.default"
+        },
+        "runAfter": {
+          "Get_Secret_From_KeyVault": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Start_Subscription": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "https://manage.office.com/api/v1.0/<テナントID>/activity/feed/subscriptions/start?contentType=Audit.General",
+          "headers": {
+            "Authorization": "Bearer @{body('Get_Access_Token')['access_token']}"
+          }
+        },
+        "runAfter": {
+          "Get_Access_Token": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_Content_URLs": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://manage.office.com/api/v1.0/<テナントID>/activity/feed/subscriptions/content?contentType=Audit.General",
+          "headers": {
+            "Authorization": "Bearer @{body('Get_Access_Token')['access_token']}"
+          }
+        },
+        "runAfter": {
+          "Start_Subscription": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Day",
+          "interval": 1
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {
+    "$connections": {
+      "value": {
+        "azurekeyvault": {
+          "connectionId": "<KeyVault コネクションID>",
+          "connectionName": "<KeyVault コネクション名>",
+          "id": "/subscriptions/<サブスクリプションID>/providers/Microsoft.Web/locations/<リージョン>/managedApis/azurekeyvault"
+        }
+      }
+    }
+  }
+}
