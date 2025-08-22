@@ -198,3 +198,72 @@ Get-AzAccessToken -ResourceUrl "https://vault.azure.net"
 
 
 ここまで
+
+{
+  "type": "Http",
+  "inputs": {
+    "method": "POST",
+    "uri": "https://login.microsoftonline.com/<テナントID>/oauth2/v2.0/token",
+    "headers": {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    "body": "grant_type=client_credentials&client_id=<アプリのクライアントID>&client_secret=<クライアントシークレット>&scope=https%3A%2F%2Fmanage.office.com%2F.default"
+  },
+  "runAfter": {},
+  "metadata": {
+    "operationMetadataId": "token_request_step"
+  }
+}
+
+
+サブスクリプション開始
+{
+  "type": "Http",
+  "inputs": {
+    "method": "POST",
+    "uri": "https://manage.office.com/api/v1.0/<テナントID>/activity/feed/subscriptions/start?contentType=Audit.General",
+    "headers": {
+      "Authorization": "Bearer @{body('アクセストークン取得ステップ')['access_token']}"
+    }
+  },
+  "runAfter": {
+    "アクセストークン取得ステップ": ["Succeeded"]
+  },
+  "metadata": {
+    "operationMetadataId": "start_subscription_step"
+  }
+}
+
+コンテンツ URL リスト取得 
+{
+  "type": "Http",
+  "inputs": {
+    "method": "GET",
+    "uri": "https://manage.office.com/api/v1.0/<テナントID>/activity/feed/subscriptions/content?contentType=Audit.General",
+    "headers": {
+      "Authorization": "Bearer @{body('アクセストークン取得ステップ')['access_token']}"
+    }
+  },
+  "runAfter": {
+    "サブスクリプション開始": ["Succeeded"]
+  },
+  "metadata": {
+    "operationMetadataId": "get_content_urls_step"
+  }
+}
+
+各ログファイル取得（For each の中で利用）
+{
+  "type": "Http",
+  "inputs": {
+    "method": "GET",
+    "uri": "@items('コンテンツ_URL_リスト')?['contentUri']",
+    "headers": {
+      "Authorization": "Bearer @{body('アクセストークン取得ステップ')['access_token']}"
+    }
+  },
+  "runAfter": {},
+  "metadata": {
+    "operationMetadataId": "get_log_file_step"
+  }
+}
