@@ -1,2 +1,48 @@
-$rsa = $cert.GetRSAPrivateKey()
-$signatureBytes = $rsa.SignData($jwtBytes, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+# --- Base64URLエンコード関数 ---
+function ConvertTo-Base64Url {
+    param([byte[]]$bytes)
+    return [Convert]::ToBase64String($bytes).TrimEnd('=') -replace '\+','-' -replace '/','_'
+}
+
+# --- ヘッダーとペイロードの生成 ---
+$headerJson = @{ alg = "RS256"; typ = "JWT" } | ConvertTo-Json -Compress
+$payloadJson = @{
+    aud = $audience
+    iss = $clientId
+    sub = $clientId
+    jti = [guid]::NewGuid().ToString()
+    nbf = [int][double]::Parse((Get-Date -UFormat %s))
+    exp = [int][double]::Parse((Get-Date -UFormat %s)) + 300
+} | ConvertTo-Json -Compress
+
+$headerEncoded  = ConvertTo-Base64Url ([System.Text.Encoding]::UTF8.GetBytes($headerJson))
+$payloadEncoded = ConvertTo-Base64Url ([System.Text.Encoding]::UTF8.GetBytes($payloadJson))
+$jwtUnsigned    = "$headerEncoded.$payloadEncoded"
+
+# --- 署名処理（型依存なし） ---
+try {
+    $rsa = $cert.GetRSAPrivateKey()
+    if (-not $rsa) { throw "証明書からRSA秘密鍵を取得できませんでした。" }
+
+    $signatureBytes = $rsa.SignData(
+        [System.Text.Encoding]::UTF8.GetBytes($jwtUnsigned),
+        [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+        [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+    )
+
+    $signatureEncoded = ConvertTo-Base64Url $signatureBytes
+    $clientAssertion  = "$jwtUnsigned.$signatureEncoded"
+}
+catch {
+    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+        StatusCode = 500
+        Body = @{
+            message = "❌ JWT署名に失敗しました"
+            error   = $_.Exception.Message
+        } | ConvertTo-Json -Depth 5
+    })
+    return
+}
+
+# --- 以下は既存の処理を継続 ---
+# 例: $clientAssertion を使ってトークン要求など...
