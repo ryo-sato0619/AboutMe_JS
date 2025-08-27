@@ -1,48 +1,72 @@
-# --- Base64URLエンコード関数 ---
-function ConvertTo-Base64Url {
-    param([byte[]]$bytes)
-    return [Convert]::ToBase64String($bytes).TrimEnd('=') -replace '\+','-' -replace '/','_'
-}
+🧭 ① バナーの設定方法（SharePoint Online）
+🔧 設定手順（モダンページの場合）
+トップページを編集（右上の「編集」ボタン）
 
-# --- ヘッダーとペイロードの生成 ---
-$headerJson = @{ alg = "RS256"; typ = "JWT" } | ConvertTo-Json -Compress
-$payloadJson = @{
-    aud = $audience
-    iss = $clientId
-    sub = $clientId
-    jti = [guid]::NewGuid().ToString()
-    nbf = [int][double]::Parse((Get-Date -UFormat %s))
-    exp = [int][double]::Parse((Get-Date -UFormat %s)) + 300
-} | ConvertTo-Json -Compress
+「画像」Webパーツを追加
 
-$headerEncoded  = ConvertTo-Base64Url ([System.Text.Encoding]::UTF8.GetBytes($headerJson))
-$payloadEncoded = ConvertTo-Base64Url ([System.Text.Encoding]::UTF8.GetBytes($payloadJson))
-$jwtUnsigned    = "$headerEncoded.$payloadEncoded"
+「画像」→「Webパーツの追加」→「画像をアップロード」
 
-# --- 署名処理（型依存なし） ---
-try {
-    $rsa = $cert.GetRSAPrivateKey()
-    if (-not $rsa) { throw "証明書からRSA秘密鍵を取得できませんでした。" }
+リンク設定
 
-    $signatureBytes = $rsa.SignData(
-        [System.Text.Encoding]::UTF8.GetBytes($jwtUnsigned),
-        [System.Security.Cryptography.HashAlgorithmName]::SHA256,
-        [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
-    )
+画像を選択 → 「リンクを追加」→ PDFまたはPowerPointのURLを指定
 
-    $signatureEncoded = ConvertTo-Base64Url $signatureBytes
-    $clientAssertion  = "$jwtUnsigned.$signatureEncoded"
-}
-catch {
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-        StatusCode = 500
-        Body = @{
-            message = "❌ JWT署名に失敗しました"
-            error   = $_.Exception.Message
-        } | ConvertTo-Json -Depth 5
-    })
-    return
-}
+代替テキストと説明文
 
-# --- 以下は既存の処理を継続 ---
-# 例: $clientAssertion を使ってトークン要求など...
+アクセシビリティ対応として「代替テキスト」を設定
+
+必要に応じて「キャプション」も追加可能
+
+公開
+
+ページ右上の「公開」または「下書き保存」
+
+✅ バナー設置のポイント
+サイズ感：横幅いっぱいのバナーは目立ちすぎる場合があるので、中央寄せ＋余白ありが自然
+
+色使い：Teamsの紫＋iPhone/iPadのシルエットで「モバイル感」を演出
+
+文言例：「📱 iPhone・iPadでTeamsが使えるようになりました！ 活用一覧はこちら」
+
+🖼️ ② ヒーロー機能の設定方法と構成案
+🔧 設定手順
+トップページを編集
+
+「ヒーロー」Webパーツを追加
+
+レイアウト選択（例：1つの大きなタイル＋小タイル4つ）
+
+タイルにコンテンツを設定
+
+タイトル、説明文、画像、リンク先（PDFまたはPowerPoint）
+
+画像の選定
+
+Microsoft公式素材や社内で許可されたTeamsアイコン＋モバイル端末のイメージ
+
+公開
+
+🧩 構成案（ヒーローWebパーツ）
+タイル	タイトル	説明	リンク先
+大タイル	「📱 モバイルでTeams活用」	iPhone・iPadでできることを一覧で紹介	PDF/PPTリンク
+小タイル①	「外出先での確認」	iPhoneでの通知・チャット確認	TeamsモバイルFAQ
+小タイル②	「サブデバイス活用」	iPadでの会議参加・資料閲覧	利用事例ページ
+小タイル③	「社内システム連携」	M365以外の連携可能な社内サービス	社内ポータルリンク
+小タイル④	「導入の背景」	モバイル対応の目的とメリット	お知らせページ
+💬 コメント案（iPhone/iPadの使い分け）
+📱 iPhone向けコメント
+「移動中や外出先でも、チャットの確認や通知の受信が可能です。急ぎの対応や会議参加も、iPhoneからスムーズに行えます。」
+
+📲 iPad向けコメント
+「iPadはサブデバイスとして、資料閲覧や会議参加に最適です。PCと併用することで、業務の効率化が図れます。」
+
+🧠 補足案（両方共通）
+「PCだけでなく、モバイル端末を活用することで、業務の柔軟性とスピードが向上します。社内システムとの連携も含めた活用方法を一覧でご紹介します。」
+
+🧩 最終的な掲載戦略（おすすめ）
+初期はヒーローWebパーツで目立たせる
+
+1〜2ヶ月後にバナー化して「更新履歴」や「ナレッジ紹介」に移行
+
+PDF/PPTはOneDrive for BusinessまたはSharePointライブラリに格納し、リンクを明示
+
+涼さんのポータルは「初心者にもわかりやすく、再現性が高い」設計思想が根底にあるので、ヒーロー機能での視覚的な導線＋コメントによる文脈補足は非常に効果的です。 もし画像素材や文言の微調整が必要であれば、そちらも一緒に考えられますよ。どの方向で進めましょうか？
