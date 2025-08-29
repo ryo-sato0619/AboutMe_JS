@@ -1,58 +1,10 @@
-param($RequestBody)
-
-# 明示的な変数定義
-$tenantId     = "<YOUR_TENANT_ID>"
-$clientId     = "<YOUR_CLIENT_ID>"
-$certThumb    = "<YOUR_CERT_THUMBPRINT>"
-$chatId       = "<TARGET_CHAT_ID>"
-$messageText  = $RequestBody.message
-
-# トークン取得（証明書ベース）
-$cert = Get-ChildItem -Path Cert:\LocalMachine\My\$certThumb
-$tokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body @{
-    client_id     = $clientId
-    scope         = "https://graph.microsoft.com/.default"
-    grant_type    = "client_credentials"
-    client_assertion_type = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-    client_assertion      = (New-JwtAssertion -ClientId $clientId -Cert $cert -TenantId $tenantId)
-}
-
-$accessToken = $tokenResponse.access_token
-
-# Teams チャット送信
-Invoke-RestMethod -Method Post -Uri "https://graph.microsoft.com/v1.0/chats/$chatId/messages" `
-    -Headers @{ Authorization = "Bearer $accessToken" } `
-    -Body (@{
-        body = @{
-            content = $messageText
-        }
-    } | ConvertTo-Json -Depth 3) `
-    -ContentType "application/json"
-
-
-
-$certName = "TeamsNotificationCert"  # 任意の名前
-$cert = New-SelfSignedCertificate `
-  -Subject "CN=$certName" `
-  -CertStoreLocation "Cert:\CurrentUser\My" `
-  -KeyExportPolicy Exportable `
-  -KeySpec Signature `
-  -KeyLength 2048 `
-  -KeyAlgorithm RSA `
-  -HashAlgorithm SHA256 `
-  -NotAfter (Get-Date).AddYears(1) `
-  -FriendlyName "$certName for Azure AD App"
-
+POST https://graph.microsoft.com/v1.0/chats/{chat-id}/messages
+Authorization: Bearer {access_token}
+Content-Type: application/json
 
 {
-  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#chats",
-  "value": [
-    {
-      "id": "19:xxxxxxxxxxxxxxxx@thread.v2",
-      "topic": "Project Chat",
-      "chatType": "group",
-      "createdDateTime": "2023-08-01T12:34:56Z"
-    },
-    ...
-  ]
+  "body": {
+    "content": "通知メッセージ本文"
+  }
 }
+
