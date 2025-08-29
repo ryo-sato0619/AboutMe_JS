@@ -28,3 +28,17 @@ Invoke-RestMethod -Method Post -Uri "https://graph.microsoft.com/v1.0/chats/$cha
         }
     } | ConvertTo-Json -Depth 3) `
     -ContentType "application/json"
+
+
+
+$certName = "TeamsNotificationCert"  # 任意の名前
+$cert = New-SelfSignedCertificate `
+  -Subject "CN=$certName" `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -KeyExportPolicy Exportable `
+  -KeySpec Signature `
+  -KeyLength 2048 `
+  -KeyAlgorithm RSA `
+  -HashAlgorithm SHA256 `
+  -NotAfter (Get-Date).AddYears(1) `
+  -FriendlyName "$certName for Azure AD App"
