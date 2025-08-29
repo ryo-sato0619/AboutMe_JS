@@ -8,3 +8,9 @@ Content-Type: application/json
   }
 }
 
+{
+  "body": {
+    "contentType": "html",
+    "content": "通知本文です"
+  }
+}
