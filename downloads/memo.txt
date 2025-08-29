@@ -42,3 +42,17 @@ $cert = New-SelfSignedCertificate `
   -HashAlgorithm SHA256 `
   -NotAfter (Get-Date).AddYears(1) `
   -FriendlyName "$certName for Azure AD App"
+
+
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#chats",
+  "value": [
+    {
+      "id": "19:xxxxxxxxxxxxxxxx@thread.v2",
+      "topic": "Project Chat",
+      "chatType": "group",
+      "createdDateTime": "2023-08-01T12:34:56Z"
+    },
+    ...
+  ]
+}
