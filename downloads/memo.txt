@@ -1,16 +1,11 @@
-POST https://graph.microsoft.com/v1.0/chats/{chat-id}/messages
-Authorization: Bearer {access_token}
-Content-Type: application/json
+Connect-MgGraph -Scopes "ServiceMessage.Read.All"
+$messages = Get-MgServiceAnnouncementMessage | Where-Object { ... }
+$messages | ConvertTo-Json | Out-File "messages.json"
 
-{
-  "body": {
-    "content": "通知メッセージ本文"
-  }
-}
 
-{
-  "body": {
-    "contentType": "html",
-    "content": "通知本文です"
-  }
+
+Connect-MgGraph -Scopes "Sites.ReadWrite.All"
+$messages = Get-Content "messages.json" | ConvertFrom-Json
+foreach ($msg in $messages) {
+    New-MgSiteListItem -SiteId ... -ListId ... -BodyParameter ...
 }
