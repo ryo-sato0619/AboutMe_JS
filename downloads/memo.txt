@@ -9,3 +9,20 @@ $messages = Get-Content "messages.json" | ConvertFrom-Json
 foreach ($msg in $messages) {
     New-MgSiteListItem -SiteId ... -ListId ... -BodyParameter ...
 }
+
+Connect-MgGraph -Scopes "ServiceMessage.Read.All"
+
+# メッセージ取得（例：最新50件）
+$messages = Get-MgServiceAnnouncementMessage -Top 50
+
+# Teams関連かつユーザー影響ありのメッセージを抽出
+$filtered = $messages | Where-Object {
+    ($_.Services -contains "Microsoft Teams") -and
+    (
+        ($_.Severity -eq "High") -or
+        ($_.ImpactDescription -match "user|impact|affect|access|experience")
+    )
+}
+
+# 表示（必要に応じて本文も含める）
+$filtered | Select-Object Title, Severity, LastModifiedDateTime, @{Name="Impact";Expression={$_.ImpactDescription}} | Format-Table -AutoSize
