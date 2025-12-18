@@ -1,24 +1,10 @@
-Connect-MgGraph -Scopes "ServiceMessage.Read.All"
-$messages = Get-MgServiceAnnouncementMessage | Where-Object { ... }
-$messages | ConvertTo-Json | Out-File "messages.json"
+# 中身を暗号化（風）に変換して一時ファイル作成
+certutil -f -encode "test.docx" "temp.enc"
+# 一時ファイルで元のファイルを「上書き」
+Move-Item -Force "temp.enc" "test.docx"
 
 
-
-Connect-MgGraph -Scopes "Sites.ReadWrite.All"
-$messages = Get-Content "messages.json" | ConvertFrom-Json
-foreach ($msg in $messages) {
-    New-MgSiteListItem -SiteId ... -ListId ... -BodyParameter ...
-}
-
-Connect-MgGraph -Scopes "ServiceMessage.Read.All"
-
-$messages = Get-MgServiceAnnouncementMessage -Top 50
-
-# タイトルに "Teams" および "User" 関連のキーワードが含まれるものを抽出
-$filtered = $messages | Where-Object {
-    ($_.Title -match "Teams") -and
-    ($_.Title -match "User|Impact|Access|Experience|Unable|Issue|Problem")
-}
-
-# 結果表示
-$filtered | Select-Object Title, Severity, LastModifiedDateTime | Format-Table -AutoSize
+# 暗号化された中身を元に戻して一時ファイル作成
+certutil -f -decode "test.docx" "temp.dec"
+# 復元したファイルで上書き
+Move-Item -Force "temp.dec" "test.docx"
