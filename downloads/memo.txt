@@ -1,10 +1,2 @@
-# 中身を暗号化（風）に変換して一時ファイル作成
-certutil -f -encode "test.docx" "temp.enc"
-# 一時ファイルで元のファイルを「上書き」
-Move-Item -Force "temp.enc" "test.docx"
-
-
-# 暗号化された中身を元に戻して一時ファイル作成
-certutil -f -decode "test.docx" "temp.dec"
-# 復元したファイルで上書き
-Move-Item -Force "temp.dec" "test.docx"
+<!-- **変更箇所: Titleをaタグで囲み、href属性にPathを設定。SharePointの内部挙動を回避する属性も追加しています** -->
+<a href="{{Path}}" target="_blank" data-interception="off" rel="noopener noreferrer">{{Title}}</a>
